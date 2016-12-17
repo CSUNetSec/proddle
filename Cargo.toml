@@ -5,6 +5,7 @@ authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
 bson = "0.3"
+bzip2 = "0.3"
 docopt = "0.6"
 mongodb = "0.1"
 rand = "0.3"

@@ -1,11 +1,16 @@
 #[macro_use(bson, doc)]
 extern crate bson;
+extern crate bzip2;
 extern crate docopt;
 extern crate mongodb;
 extern crate rand;
 extern crate rustc_serialize;
 extern crate time;
 
+use bson::Bson;
+use bson::spec::BinarySubtype;
+use bzip2::Compression;
+use bzip2::read::BzEncoder;
 use docopt::Docopt;
 use mongodb::{Client, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
@@ -22,8 +27,7 @@ USAGE:
     yogi download <local-filename> <module-name>
     yogi schedule <module-name> <domain>
     yogi search (--module-name=<module-name> | --domain=<domain>)
-    yogi update <local-filename> <module-name>
-    yogi upload <local-filename> <module-name>
+    yogi upload <local-filename> <module-name> [<dependency>...]
 
 OPTIONS:
     -h --help                       Display this screen.
@@ -37,8 +41,8 @@ struct Args {
     cmd_download: bool,
     cmd_schedule: bool,
     cmd_search: bool,
-    cmd_update: bool,
     cmd_upload: bool,
+    arg_dependency: Vec<String>,
     arg_domain: String,
     arg_local_filename: String,
     arg_module_name: String,
@@ -84,32 +88,35 @@ fn main() {
                 }
             }
         }
-    } else if args.cmd_update {
-        unimplemented!();
     } else if args.cmd_upload {
-        //read file into buffer
-        let mut file = match File::open(args.arg_local_filename) {
+        //read file into compressed binary buffer
+        let file = match File::open(args.arg_local_filename) {
             Ok(file) => file,
             Err(e) => panic!("failed to open local file : {}", e),
         };
 
-        let mut buffer = String::new();
-        if let Err(e) = file.read_to_string(&mut buffer) {
+        let mut bz_encoder = BzEncoder::new(file, Compression::Best);
+
+        let mut buffer = Vec::new();
+        if let Err(e) = bz_encoder.read_to_end(&mut buffer) {
             panic!("failed to read local file: {}", e);
         }
 
-        //specify collection to add
+        //specify modules collection
         let collection = client.db("proddle").collection("modules");
 
         //create module document
         let module_id = rand::random::<u64>();
         let timestamp = time::now_utc().to_timespec().sec;
         let module_name = args.arg_module_name;
+        let dependencies: Vec<Bson> = args.arg_dependency.iter().map(|x| Bson::String(x.to_owned())).collect();
+        let definition = Bson::Binary(BinarySubtype::Generic, buffer);
         let document = doc! { 
             "_id" => module_id,
             "timestamp" => timestamp,
             "module_name" => module_name,
-            "definition" => buffer
+            "dependencies" => dependencies,
+            "definition" => definition
         };
 
         //insert document
