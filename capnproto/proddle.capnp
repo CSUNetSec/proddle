@@ -1,8 +1,8 @@
 @0xa74d94a500622841;
 
 interface Proddle {
-    getModules @0 (bucketHashes :List(BucketHash)) -> (moduleBucket :List(ModuleBucket));
-    getOperations @1 (bucketHashes :List(BucketHash)) -> (operationBucket: List(OperationBucket));
+    getModules @0 (bucketHashes :List(BucketHash)) -> (moduleBuckets :List(ModuleBucket));
+    getOperations @1 (bucketHashes :List(BucketHash)) -> (operationBuckets :List(OperationBucket));
 }
 
 struct BucketHash {
