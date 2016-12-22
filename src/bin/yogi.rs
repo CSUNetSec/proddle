@@ -4,23 +4,20 @@ extern crate bzip2;
 #[macro_use]
 extern crate clap;
 extern crate mongodb;
+extern crate proddle;
 extern crate rand;
 extern crate rustc_serialize;
 extern crate time;
 
 use bson::Bson;
-use bson::ordered::OrderedDocument;
 use bson::spec::BinarySubtype;
 use bzip2::Compression;
 use bzip2::read::{BzDecoder, BzEncoder};
-use mongodb::{Client, ClientInner, ThreadedClient};
-use mongodb::cursor::Cursor as MongodbCursor;
+use mongodb::ThreadedClient;
 use mongodb::db::ThreadedDatabase;
-use mongodb::coll::options::{CursorType, FindOptions};
 
 use std::fs::File;
 use std::io::{Cursor, Read};
-use std::sync::Arc;
 
 fn main() {
     let matches = clap_app!(yogi =>
@@ -63,7 +60,10 @@ fn main() {
         ).get_matches();
 
     //connect to mongodb
-    let client = Client::connect("localhost", 27017).ok().expect("failed to initialize connection with mongodb");
+    let client = match proddle::get_mongodb_client("localhost", 27017) {
+        Ok(client) => client,
+        Err(e) => panic!("{}", e),
+    };
 
     if let Some(matches) = matches.subcommand_matches("module") {
         if let Some(matches) = matches.subcommand_matches("add") {
@@ -74,7 +74,7 @@ fn main() {
                 None => Vec::new(),
             };
 
-            let version = match find_module(client.clone(), module, None) {
+            let version = match proddle::find_module(client.clone(), module, None, true) {
                 Ok(Some(document)) => {
                     match document.get("version") {
                         Some(&Bson::I32(document_version)) => document_version + 1,
@@ -117,30 +117,37 @@ fn main() {
         } else if let Some(matches) = matches.subcommand_matches("search") {
             let module = matches.value_of("MODULE").unwrap();
 
-            //search for latest version of module
-            match find_module(client.clone(), module, None) {
-                Ok(Some(document)) => {
-                    let timestamp = document.get("timestamp").unwrap();
-                    let module = document.get("module").unwrap();
-                    let version = document.get("version").unwrap();
-                    let dependencies = document.get("dependencies").unwrap();
-                    let content = match document.get("content") {
-                        Some(&Bson::Binary(BinarySubtype::Generic, ref content)) => content.to_owned(),
-                        _ => panic!("could not parse 'definiton' as binary field"),
-                    };
+            match proddle::find_modules(client.clone(), Some(module), None, Some(1), true) {
+                Ok(cursor) => {
+                    for document in cursor {
+                        let document = match document {
+                            Ok(document) => document,
+                            Err(e) => panic!("failed to retrieve document: {}", e),
+                        };
 
-                    //decompress content
-                    let mut bz_decoder = BzDecoder::new(Cursor::new(content));
+                        //println!("{:?}", document);
+                        let timestamp = document.get("timestamp").unwrap();
+                        let module = document.get("module").unwrap();
+                        let version = document.get("version").unwrap();
+                        let dependencies = document.get("dependencies").unwrap();
+                        let content = match document.get("content") {
+                            Some(&Bson::Binary(BinarySubtype::Generic, ref content)) => content.to_owned(),
+                            _ => panic!("could not parse 'definiton' as binary field"),
+                        };
 
-                    let mut buffer = Vec::new();
-                    if let Err(e) = bz_decoder.read_to_end(&mut buffer) {
-                        panic!("failed to decompress file: {}", e);
+                        //decompress content
+                        let mut bz_decoder = BzDecoder::new(Cursor::new(content));
+
+                        let mut buffer = Vec::new();
+                        if let Err(e) = bz_decoder.read_to_end(&mut buffer) {
+                            panic!("failed to decompress file: {}", e);
+                        }
+
+                        let content = String::from_utf8(buffer).unwrap();
+                        println!("timestamp:{}\nmodule:{}\nversion:{}\ndependencies:{}\ncontent:{:?}", timestamp, module, version, dependencies, content);
                     }
-
-                    let content = String::from_utf8(buffer).unwrap();
-                    println!("timestamp:{}\nmodule:{}\nversion:{}\ndependencies:{}\ncontent:{:?}", timestamp, module, version, dependencies, content);
-                }
-                _ => panic!("module not found"),
+                },
+                Err(e) => panic!("failed to find operations: {}", e),
             }
         }
     } else if let Some(matches) = matches.subcommand_matches("operation") {
@@ -158,7 +165,7 @@ fn main() {
             };
 
             //check if module exists
-            match find_module(client.clone(), module, None) {
+            match proddle::find_module(client.clone(), module, None, true) {
                 Ok(Some(_)) => {},
                 _ => panic!("module does not exist"),
             }
@@ -181,7 +188,7 @@ fn main() {
         } else if let Some(matches) = matches.subcommand_matches("search") {
             let domain = matches.value_of("DOMAIN").unwrap();
 
-            match find_operations(client.clone(), domain, None) {
+            match proddle::find_operations(client.clone(), Some(domain), None, None, true) {
                 Ok(cursor) => {
                     for document in cursor {
                         println!("{:?}", document);
@@ -190,91 +197,5 @@ fn main() {
                 Err(e) => panic!("failed to find operations: {}", e),
             }
         }
-    }
-}
-
-fn find_module(client: Arc<ClientInner>, module: &str, version: Option<i32>) -> Result<Option<OrderedDocument>, mongodb::Error> {
-    //specify modules collection
-    let collection = client.db("proddle").collection("modules");
-
-    //query db for correct document
-    match version {
-        Some(search_version) => {
-            let search_document = doc! {
-                "module" => module,
-                "version" => search_version
-            };
-
-            collection.find_one(Some(search_document), None)
-        },
-        None => {
-            let search_document = doc! {
-                "module" => module
-            };
-
-            let negative_one = -1;
-            let find_options = FindOptions {
-                allow_partial_results: false,
-                no_cursor_timeout: false,
-                op_log_replay: false,
-                skip: 0,
-                limit: 1,
-                cursor_type: CursorType::NonTailable,
-                batch_size: 0,
-                comment: None,
-                max_time_ms: None,
-                modifiers: None,
-                projection: None,
-                sort: Some(doc! {
-                    "version" => negative_one
-                }),
-                read_preference: None,
-            };
-
-            collection.find_one(Some(search_document), Some(find_options))
-        },
-    }
-}
-
-fn find_operations(client: Arc<ClientInner>, domain: &str, module: Option<&str>) -> Result<MongodbCursor, mongodb::Error> {
-    //specify operations collection
-    let collection = client.db("proddle").collection("operations");
-
-    //query db for correct documents
-    match module {
-        Some(search_module) => {
-            let search_document = doc! {
-                "domain" => domain,
-                "module" => search_module
-            };
-
-            collection.find(Some(search_document), None)
-        },
-        None => {
-            let search_document = doc! {
-                "domain" => domain
-            };
-
-            let negative_one = -1;
-            let find_options = FindOptions {
-                allow_partial_results: false,
-                no_cursor_timeout: false,
-                op_log_replay: false,
-                skip: 0,
-                limit: 0,
-                cursor_type: CursorType::NonTailable,
-                batch_size: 0,
-                comment: None,
-                max_time_ms: None,
-                modifiers: None,
-                projection: None,
-                sort: Some(doc! {
-                    "timestamp" => negative_one
-                }),
-                read_preference: None,
-            };
-
-            collection.find(Some(search_document), Some(find_options))
-        },
     }
 }

@@ -1,5 +1,6 @@
 extern crate capnp;
 extern crate capnp_rpc;
+#[macro_use]
 extern crate gj;
 extern crate gjio;
 extern crate proddle;
@@ -29,7 +30,7 @@ fn main() {
         let listener = try!(tcp_address.listen());
 
         //start server
-        let proddle = ToClient::new(ServerImpl::new()).from_server::<capnp_rpc::Server>();
+        let proddle = ToClient::new(ServerImpl::new("127.0.0.1", 27017)).from_server::<capnp_rpc::Server>();
         let task_set = TaskSet::new(Box::new(Reaper));
 
         //accept connection
@@ -65,17 +66,29 @@ fn accept_loop(listener: SocketListener, mut task_set: TaskSet<(), capnp::Error>
 }
 
 struct ServerImpl {
+    mongodb_host: String,
+    mongodb_port: u16,
 }
 
 impl ServerImpl {
-    pub fn new() -> ServerImpl {
+    pub fn new(mongodb_host: &str, mongodb_port: u16) -> ServerImpl {
         ServerImpl {
+            mongodb_host: mongodb_host.to_owned(),
+            mongodb_port: mongodb_port,
         }
     }
 }
 
 impl Server for ServerImpl {
-    fn get_modules(&mut self, _: GetModulesParams<>, _: GetModulesResults<>) -> Promise<(), capnp::Error> {
+    fn get_modules(&mut self, params: GetModulesParams<>, _: GetModulesResults<>) -> Promise<(), capnp::Error> {
+        let params = pry!(params.get());
+        let bucket_hashes = pry!(params.get_bucket_hashes());
+        
+        for bucket_hash in bucket_hashes.iter() {
+            println!("{}: {}", bucket_hash.get_bucket(), bucket_hash.get_hash());
+        }
+
+        //TODO connect to the mongodb backend and compute hashes over modules
         Promise::err(capnp::Error::unimplemented("method not implemented".to_string()))
     }
 
