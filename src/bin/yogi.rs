@@ -85,27 +85,31 @@ fn main() {
             };
 
             //read file into compressed binary buffer
-            let file = match File::open(file) {
+            let mut file = match File::open(file) {
                 Ok(file) => file,
                 Err(e) => panic!("failed to open file : {}", e),
             };
 
-            let mut bz_encoder = BzEncoder::new(file, Compression::Best);
+            /*let mut bz_encoder = BzEncoder::new(file, Compression::Best);
 
             let mut buffer = Vec::new();
             if let Err(e) = bz_encoder.read_to_end(&mut buffer) {
+                panic!("failed to read local file: {}", e);
+            }*/
+            let mut buffer = String::new();
+            if let Err(e) = file.read_to_string(&mut buffer) {
                 panic!("failed to read local file: {}", e);
             }
 
             //create module document
             let timestamp = time::now_utc().to_timespec().sec;
-            let content = Bson::Binary(BinarySubtype::Generic, buffer);
+            //let content = Bson::Binary(BinarySubtype::Generic, buffer);
             let document = doc! { 
                 "timestamp" => timestamp,
                 "name" => module_name,
                 "version" => version,
                 "dependencies" => dependencies,
-                "content" => content
+                "content" => buffer
             };
 
             //insert document
@@ -126,7 +130,7 @@ fn main() {
                         };
 
                         //println!("{:?}", document);
-                        let timestamp = document.get("timestamp").unwrap();
+                        /*let timestamp = document.get("timestamp").unwrap();
                         let module_name = document.get("name").unwrap();
                         let version = document.get("version").unwrap();
                         let dependencies = document.get("dependencies").unwrap();
@@ -144,7 +148,8 @@ fn main() {
                         }
 
                         let content = String::from_utf8(buffer).unwrap();
-                        println!("timestamp:{}\nname:{}\nversion:{}\ndependencies:{}\ncontent:{:?}", timestamp, module_name, version, dependencies, content);
+                        println!("timestamp:{}\nname:{}\nversion:{}\ndependencies:{}\ncontent:{:?}", timestamp, module_name, version, dependencies, content);*/
+                        println!("{:?}", document);
                     }
                 },
                 Err(e) => panic!("failed to find operations: {}", e),
