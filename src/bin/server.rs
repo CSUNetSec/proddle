@@ -1,3 +1,4 @@
+extern crate bson;
 extern crate capnp;
 extern crate capnp_rpc;
 #[macro_use]
@@ -5,6 +6,7 @@ extern crate gj;
 extern crate gjio;
 extern crate proddle;
 
+use bson::Bson;
 use capnp::capability::Promise;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
@@ -14,6 +16,8 @@ use gjio::SocketListener;
 use proddle::proddle_capnp::proddle::{GetModulesParams, GetModulesResults, GetOperationsParams, GetOperationsResults};
 use proddle::proddle_capnp::proddle::{Client, Server, ToClient};
 
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -80,16 +84,82 @@ impl ServerImpl {
 }
 
 impl Server for ServerImpl {
-    fn get_modules(&mut self, params: GetModulesParams<>, _: GetModulesResults<>) -> Promise<(), capnp::Error> {
+    fn get_modules(&mut self, params: GetModulesParams<>, mut results: GetModulesResults<>) -> Promise<(), capnp::Error> {
         let params = pry!(params.get());
-        let bucket_hashes = pry!(params.get_bucket_hashes());
+        //let bucket_hashes = pry!(params.get_bucket_hashes());
+        let param_modules = pry!(params.get_modules());
         
-        for bucket_hash in bucket_hashes.iter() {
-            println!("{}: {}", bucket_hash.get_bucket(), bucket_hash.get_hash());
+        //connect to mongodb
+        let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
+            Ok(client) => client,
+            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to connect to mongodb: {}", e))),
+        };
+
+        //iterate over modules in mongodb and store in modules map
+        let mut modules = HashMap::new();
+        match proddle::find_modules(client.clone(), None, None, None, false) {
+            Ok(cursor) => {
+                for document in cursor {
+                    let document = match document {
+                        Ok(document) => document,
+                        Err(e) => {
+                            println!("failed to fetch document: {}", e);
+                            continue;
+                        }
+                    };
+
+                    //parse fields from document
+                    let module_name = match document.get("name") {
+                        Some(&Bson::String(ref name)) => name.to_owned(),
+                        _ => panic!("failed to parse name as string"),
+                    };
+
+                    let version = match document.get("version") {
+                        Some(&Bson::I32(version)) => version,
+                        _ => panic!("failed to parse version as i32"),
+                    };
+
+                    //TODO parse the rest of fields
+
+                    modules.insert(module_name.clone(), (module_name, version as u16));
+                }
+            },
+            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve modules: {}", e))),
         }
 
-        //TODO connect to the mongodb backend and compute hashes over modules
-        Promise::err(capnp::Error::unimplemented("method not implemented".to_string()))
+        //compare vantage module versions to mongodb versions
+        for module in param_modules.iter() {
+            let module_name = match module.get_name() {
+                Ok(name) => name,
+                Err(e) => panic!("failed to retrieve name from module: {}", e),
+            };
+
+            let entry = modules.entry(module_name.to_owned());
+            if let Entry::Occupied(occupied_entry) = entry {
+                //if vantage version is up to date remove from mongodb map
+                if module.get_version() >= occupied_entry.get().1 {
+                    occupied_entry.remove();
+                }
+            } else if let Entry::Vacant(vacant_entry) = entry {
+                //if mongodb map doens't contain remove from vantage
+                vacant_entry.insert((module_name.to_owned(), 0));
+            }
+        }
+
+        //create results message
+        let mut results_modules = results.get().init_modules(modules.len() as u32);
+        for (i, tuple) in modules.values().enumerate() {
+            let mut module = results_modules.borrow().get(i as u32);
+            
+            //TODO use correct values populated
+            if let Err(e) = proddle::build_module(&mut module, None, None, &tuple.0, tuple.1, None, None) {
+                println!("{}", e);
+                continue;
+            }
+        }
+
+        Promise::ok(())
+        //Promise::err(capnp::Error::unimplemented("method not implemented".to_string()))
     }
 
     fn get_operations(&mut self, _: GetOperationsParams<>, _: GetOperationsResults<>) -> Promise<(), capnp::Error> {

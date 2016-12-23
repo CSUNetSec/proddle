@@ -31,23 +31,31 @@ fn main() {
         let proddle: Client = rpc_system.bootstrap(Side::Server);
 
         //TODO execute command for client
-        let bucket_count = 4;
         let mut request = proddle.get_modules_request();
         {
-            let mut bucket_hashes = request.get().init_bucket_hashes(bucket_count);
-            for bucket in 0..bucket_count {
+            let mut modules = request.get().init_modules(2);
+            /*for module in 0..module_count {
                 let mut bucket_hash = bucket_hashes.borrow().get(bucket);
                 bucket_hash.set_bucket(0);
                 bucket_hash.set_hash(0);
+            }*/
+            {   
+                let mut module = modules.borrow().get(0);
+                module.set_name("core/veil.py");
+                module.set_id(1);
             }
+
+            let mut module = modules.borrow().get(1);
+            module.set_name("core/shadow.py");
+            module.set_id(2);
         }
 
         let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
         let reader = try!(response.get());
-        let module_buckets = try!(reader.get_module_buckets());
+        let modules = try!(reader.get_modules());
 
-        for module_bucket in module_buckets.iter() {
-            println!("{}", module_bucket.get_bucket());
+        for module in modules.iter() {
+            println!("PROCESSING MODULE {}:{}", module.get_name().unwrap(), module.get_version());
         }
 
         Ok(())

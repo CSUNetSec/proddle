@@ -13,8 +13,62 @@ use mongodb::coll::options::{CursorType, FindOptions};
 use mongodb::cursor::Cursor;
 use mongodb::db::ThreadedDatabase;
 
+use std::collections::BTreeMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+/*
+ * HASHING
+ */
+pub fn hash_string(value: &str) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    value.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub fn get_bucket_key(map: &BTreeMap<u64, DefaultHasher>, key: u64) -> Option<u64> {
+    let mut bucket_key = 0;
+    for map_key in map.keys() {
+        if *map_key > key {
+            break;
+        }
+
+        bucket_key = *map_key;
+    }
+
+    Some(bucket_key)
+}
+
+/*
+ * CAPNPROTO BUILDERS
+ */
+pub fn build_module<'a>(msg: &'a mut proddle_capnp::module::Builder, id: Option<u64>, timestamp: Option<u64>, name: &str, version: u16, dependencies: Option<Vec<&str>>, content: Option<&str>) -> Result<(), String> {
+    if let Some(id) = id {
+        msg.set_id(id);
+    }
+
+    if let Some(timestamp) = timestamp {
+        msg.set_timestamp(timestamp);
+    }
+
+    msg.set_name(name);
+    msg.set_version(version);
+
+    /*if let Some(dependencies) = dependencies {
+        msg.set_dependencies(dep
+    }*/
+
+    if let Some(content) = content {
+        msg.set_content(content);
+    }
+
+    Ok(())
+}
+
+/*
+ * MONGODB
+ */
 pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, mongodb::Error> {
     Client::connect(host, port)
 }
@@ -108,7 +162,7 @@ pub fn find_operation(client: Arc<ClientInner>, domain: &str, module: Option<&st
     let negative_one = -1;
     let sort_document = match order_by_timestamp {
         true => Some(doc! { "timestamp" => negative_one }),
-        false => None,
+        false => Some(doc! { "_id" => 1 }),
     };
 
     let find_options = Some(FindOptions {
@@ -152,7 +206,7 @@ pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, module: O
     let negative_one = -1;
     let sort_document = match order_by_timestamp {
         true => Some(doc! { "timestamp" => negative_one }),
-        false => None,
+        false => Some(doc! { "_id" => 1 }),
     };
 
     let find_options = Some(FindOptions {

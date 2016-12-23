@@ -28,23 +28,23 @@ fn main() {
                 (@subcommand add =>
                     (about: "Add a module")
                     (@arg FILE: +required "Filename of module")
-                    (@arg MODULE: +required "Name of module")
+                    (@arg MODULE_NAME: +required "Name of module")
                     (@arg DEPENDENCY: -d --dependency +takes_value ... "Python dependencies of the module")
                 )
                 (@subcommand delete =>
                     (about: "Delete a module")
-                    (@arg MODULE: +required "Name of module")
+                    (@arg MODULE_NAME: +required "Name of module")
                 )
                 (@subcommand search =>
                     (about: "Search for a module")
-                    (@arg MODULE: +required "Name of module")
+                    (@arg MODULE_NAME: +required "Name of module")
                 )
             )
             (@subcommand operation =>
                 (about: "Perform actions on operations")
                 (@subcommand add =>
                     (about: "Add a operation")
-                    (@arg MODULE: +required "Name of module")
+                    (@arg MODULE_NAME: +required "Name of module")
                     (@arg DOMAIN: +required "Domain name")
                     (@arg INTERVAL: -i --interval +takes_value "Operation execution interval in seconds")
                 )
@@ -68,13 +68,13 @@ fn main() {
     if let Some(matches) = matches.subcommand_matches("module") {
         if let Some(matches) = matches.subcommand_matches("add") {
             let file = matches.value_of("FILE").unwrap();
-            let module = matches.value_of("MODULE").unwrap();
+            let module_name = matches.value_of("MODULE_NAME").unwrap();
             let dependencies: Vec<Bson> = match matches.values_of("DEPENDENCY") {
                 Some(dependencies) => dependencies.map(|x| Bson::String(x.to_owned())).collect(),
                 None => Vec::new(),
             };
 
-            let version = match proddle::find_module(client.clone(), module, None, true) {
+            let version = match proddle::find_module(client.clone(), module_name, None, true) {
                 Ok(Some(document)) => {
                     match document.get("version") {
                         Some(&Bson::I32(document_version)) => document_version + 1,
@@ -102,7 +102,7 @@ fn main() {
             let content = Bson::Binary(BinarySubtype::Generic, buffer);
             let document = doc! { 
                 "timestamp" => timestamp,
-                "module" => module,
+                "name" => module_name,
                 "version" => version,
                 "dependencies" => dependencies,
                 "content" => content
@@ -115,9 +115,9 @@ fn main() {
         } else if let Some(matches) = matches.subcommand_matches("delete") {
             unimplemented!();
         } else if let Some(matches) = matches.subcommand_matches("search") {
-            let module = matches.value_of("MODULE").unwrap();
+            let module_name = matches.value_of("MODULE_NAME").unwrap();
 
-            match proddle::find_modules(client.clone(), Some(module), None, Some(1), true) {
+            match proddle::find_modules(client.clone(), Some(module_name), None, Some(1), true) {
                 Ok(cursor) => {
                     for document in cursor {
                         let document = match document {
@@ -127,7 +127,7 @@ fn main() {
 
                         //println!("{:?}", document);
                         let timestamp = document.get("timestamp").unwrap();
-                        let module = document.get("module").unwrap();
+                        let module_name = document.get("name").unwrap();
                         let version = document.get("version").unwrap();
                         let dependencies = document.get("dependencies").unwrap();
                         let content = match document.get("content") {
@@ -144,7 +144,7 @@ fn main() {
                         }
 
                         let content = String::from_utf8(buffer).unwrap();
-                        println!("timestamp:{}\nmodule:{}\nversion:{}\ndependencies:{}\ncontent:{:?}", timestamp, module, version, dependencies, content);
+                        println!("timestamp:{}\nname:{}\nversion:{}\ndependencies:{}\ncontent:{:?}", timestamp, module_name, version, dependencies, content);
                     }
                 },
                 Err(e) => panic!("failed to find operations: {}", e),
@@ -152,7 +152,7 @@ fn main() {
         }
     } else if let Some(matches) = matches.subcommand_matches("operation") {
         if let Some(matches) = matches.subcommand_matches("add") {
-            let module = matches.value_of("MODULE").unwrap();
+            let module_name = matches.value_of("MODULE_NAME").unwrap();
             let domain = matches.value_of("DOMAIN").unwrap();
             let interval = match matches.value_of("INTERVAL") {
                 Some(interval) => {
@@ -165,7 +165,7 @@ fn main() {
             };
 
             //check if module exists
-            match proddle::find_module(client.clone(), module, None, true) {
+            match proddle::find_module(client.clone(), module_name, None, true) {
                 Ok(Some(_)) => {},
                 _ => panic!("module does not exist"),
             }
@@ -174,7 +174,7 @@ fn main() {
             let timestamp = time::now_utc().to_timespec().sec;
             let document = doc! {
                 "timestamp" => timestamp,
-                "module" => module,
+                "name" => module_name,
                 "domain" => domain,
                 "interval" => interval
             };

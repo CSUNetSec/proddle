@@ -1,7 +1,7 @@
 @0xa74d94a500622841;
 
 interface Proddle {
-    getModules @0 (bucketHashes :List(BucketHash)) -> (moduleBuckets :List(ModuleBucket));
+    getModules @0 (modules :List(Module)) -> (modules :List(Module));
     getOperations @1 (bucketHashes :List(BucketHash)) -> (operationBuckets :List(OperationBucket));
 }
 
@@ -13,14 +13,11 @@ struct BucketHash {
 # Module Definition
 struct Module {
     id @0 :UInt64;
-    name @1 :Text;
-    version @2 :UInt16;
-    content @3 :Text;
-}
-
-struct ModuleBucket {
-    bucket @0 :UInt64;
-    modules @1 :List(Module);
+    timestamp @1 :UInt64;
+    name @2 :Text;
+    version @3 :UInt16;
+    dependencies @4 :List(Text);
+    content @5 :Text;
 }
 
 # Operation Definition
