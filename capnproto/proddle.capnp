@@ -12,12 +12,11 @@ struct BucketHash {
 
 # Module Definition
 struct Module {
-    id @0 :UInt64;
-    timestamp @1 :UInt64;
-    name @2 :Text;
-    version @3 :UInt16;
-    dependencies @4 :List(Text);
-    content @5 :Text;
+    timestamp @0 :UInt64;
+    name @1 :Text;
+    version @2 :UInt16;
+    dependencies @3 :List(Text);
+    content @4 :Text;
 }
 
 # Operation Definition

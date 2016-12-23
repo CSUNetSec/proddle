@@ -43,11 +43,7 @@ pub fn get_bucket_key(map: &BTreeMap<u64, DefaultHasher>, key: u64) -> Option<u6
 /*
  * CAPNPROTO BUILDERS
  */
-pub fn build_module<'a>(msg: &'a mut proddle_capnp::module::Builder, id: Option<u64>, timestamp: Option<u64>, name: &str, version: u16, dependencies: Option<Vec<&str>>, content: Option<&str>) -> Result<(), String> {
-    if let Some(id) = id {
-        msg.set_id(id);
-    }
-
+pub fn build_module<'a>(msg: &'a mut proddle_capnp::module::Builder, timestamp: Option<u64>, name: &str, version: u16, dependencies: Option<Vec<&str>>, content: Option<&str>) -> Result<(), String> {
     if let Some(timestamp) = timestamp {
         msg.set_timestamp(timestamp);
     }

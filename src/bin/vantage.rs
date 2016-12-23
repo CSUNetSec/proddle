@@ -42,12 +42,12 @@ fn main() {
             {   
                 let mut module = modules.borrow().get(0);
                 module.set_name("core/veil.py");
-                module.set_id(1);
+                module.set_version(1);
             }
 
             let mut module = modules.borrow().get(1);
             module.set_name("core/shadow.py");
-            module.set_id(2);
+            module.set_version(2);
         }
 
         let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
@@ -55,7 +55,7 @@ fn main() {
         let modules = try!(reader.get_modules());
 
         for module in modules.iter() {
-            println!("PROCESSING MODULE {}:{}", module.get_name().unwrap(), module.get_version());
+            println!("PROCESSING MODULE {},{},{}", module.get_timestamp(), module.get_name().unwrap(), module.get_version());
         }
 
         Ok(())

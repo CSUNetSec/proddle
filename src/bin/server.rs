@@ -109,6 +109,11 @@ impl Server for ServerImpl {
                     };
 
                     //parse fields from document
+                    let timestamp = match document.get("timestamp") {
+                        Some(&Bson::I64(timestamp)) => timestamp,
+                        _ => panic!("failed to parse timestamp as i64"),
+                    };
+
                     let module_name = match document.get("name") {
                         Some(&Bson::String(ref name)) => name.to_owned(),
                         _ => panic!("failed to parse name as string"),
@@ -119,9 +124,15 @@ impl Server for ServerImpl {
                         _ => panic!("failed to parse version as i32"),
                     };
 
-                    //TODO parse the rest of fields
+                    //TODO parse dependencies and add down below
+                    
+                    let content = match document.get("content") {
+                        Some(&Bson::String(ref content)) => content.to_owned(),
+                        _ => panic!("failed to parse content as string"),
+                    };
 
-                    modules.insert(module_name.clone(), (module_name, version as u16));
+                    //TODO check if module name already exists and/or version comparrison
+                    modules.insert(module_name.clone(), (Some(timestamp as u64), module_name, version as u16, Some(content)));
                 }
             },
             Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve modules: {}", e))),
@@ -137,12 +148,12 @@ impl Server for ServerImpl {
             let entry = modules.entry(module_name.to_owned());
             if let Entry::Occupied(occupied_entry) = entry {
                 //if vantage version is up to date remove from mongodb map
-                if module.get_version() >= occupied_entry.get().1 {
+                if module.get_version() >= occupied_entry.get().2 {
                     occupied_entry.remove();
                 }
             } else if let Entry::Vacant(vacant_entry) = entry {
                 //if mongodb map doens't contain remove from vantage
-                vacant_entry.insert((module_name.to_owned(), 0));
+                vacant_entry.insert((None, module_name.to_owned(), 0, None));
             }
         }
 
@@ -151,8 +162,14 @@ impl Server for ServerImpl {
         for (i, tuple) in modules.values().enumerate() {
             let mut module = results_modules.borrow().get(i as u32);
             
+            //make content a string reference to avoid copying
+            let content = match tuple.3 {
+                Some(ref content) => Some(content.as_ref()),
+                None => None,
+            };
+
             //TODO use correct values populated
-            if let Err(e) = proddle::build_module(&mut module, None, None, &tuple.0, tuple.1, None, None) {
+            if let Err(e) = proddle::build_module(&mut module, tuple.0, &tuple.1, tuple.2, None, content) {
                 println!("{}", e);
                 continue;
             }
