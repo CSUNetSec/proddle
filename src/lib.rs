@@ -51,9 +51,13 @@ pub fn build_module<'a>(msg: &'a mut proddle_capnp::module::Builder, timestamp: 
     msg.set_name(name);
     msg.set_version(version);
 
-    /*if let Some(dependencies) = dependencies {
-        msg.set_dependencies(dep
-    }*/
+    if let Some(_) = dependencies {
+        //TODO set dependencies
+        /*let mut msg_dependencies = msg.init_dependencies(dependencies.len() as u32);
+        for (i, dependency) in dependencies.iter().enumerate() {
+            msg_dependencies.set(i as u32, dependency);
+        }*/
+    }
 
     if let Some(content) = content {
         msg.set_content(content);

@@ -108,9 +108,9 @@ impl Server for ServerImpl {
                         }
                     };
 
-                    //parse fields from document
+                    //check if this is the newest version of module we've seen
                     let timestamp = match document.get("timestamp") {
-                        Some(&Bson::I64(timestamp)) => timestamp,
+                        Some(&Bson::I64(timestamp)) => timestamp as u64,
                         _ => panic!("failed to parse timestamp as i64"),
                     };
 
@@ -120,19 +120,37 @@ impl Server for ServerImpl {
                     };
 
                     let version = match document.get("version") {
-                        Some(&Bson::I32(version)) => version,
+                        Some(&Bson::I32(version)) => version as u16,
                         _ => panic!("failed to parse version as i32"),
                     };
 
-                    //TODO parse dependencies and add down below
+                    let dependencies: Vec<String> = match document.get("dependencies") {
+                        Some(&Bson::Array(ref dependencies)) => dependencies.iter().map(|x| x.to_string()).collect(),
+                        _ => panic!("failed to parse dependencies as array"),
+                    };
                     
                     let content = match document.get("content") {
                         Some(&Bson::String(ref content)) => content.to_owned(),
                         _ => panic!("failed to parse content as string"),
                     };
 
-                    //TODO check if module name already exists and/or version comparrison
-                    modules.insert(module_name.clone(), (Some(timestamp as u64), module_name, version as u16, Some(content)));
+                    //check if module name already exists and/or version comparrison
+                    let entry = modules.entry(module_name.to_owned());
+                    if let Entry::Occupied(mut occupied_entry) = entry {
+                        let replace;
+                        {
+                            let entry: &(Option<u64>, String, u16, Option<Vec<String>>, Option<String>) = occupied_entry.get();
+                            replace = version > entry.2;
+                        }
+                        
+                        //if version is newer then replace
+                        if replace {
+                            occupied_entry.insert((Some(timestamp), module_name, version, Some(dependencies), Some(content)));
+                        }
+                    } else if let Entry::Vacant(vacant_entry) = entry {
+                        //if entry does not exist then insert
+                        vacant_entry.insert((Some(timestamp), module_name, version, Some(dependencies), Some(content)));
+                    }
                 }
             },
             Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve modules: {}", e))),
@@ -153,30 +171,32 @@ impl Server for ServerImpl {
                 }
             } else if let Entry::Vacant(vacant_entry) = entry {
                 //if mongodb map doens't contain remove from vantage
-                vacant_entry.insert((None, module_name.to_owned(), 0, None));
+                vacant_entry.insert((None, module_name.to_owned(), 0, None, None));
             }
         }
 
         //create results message
         let mut results_modules = results.get().init_modules(modules.len() as u32);
         for (i, tuple) in modules.values().enumerate() {
-            let mut module = results_modules.borrow().get(i as u32);
+            //make dependencies and content a string reference to avoid copying
+            let dependencies: Option<Vec<&str>> = match tuple.3 {
+                Some(ref dependencies) => Some(dependencies.iter().map(|x| x.as_ref()).collect()),
+                None => None,
+            };
             
-            //make content a string reference to avoid copying
-            let content = match tuple.3 {
+            let content = match tuple.4 {
                 Some(ref content) => Some(content.as_ref()),
                 None => None,
             };
 
-            //TODO use correct values populated
-            if let Err(e) = proddle::build_module(&mut module, tuple.0, &tuple.1, tuple.2, None, content) {
+            let mut module = results_modules.borrow().get(i as u32);
+            if let Err(e) = proddle::build_module(&mut module, tuple.0, &tuple.1, tuple.2, dependencies, content) {
                 println!("{}", e);
                 continue;
             }
         }
 
         Promise::ok(())
-        //Promise::err(capnp::Error::unimplemented("method not implemented".to_string()))
     }
 
     fn get_operations(&mut self, _: GetOperationsParams<>, _: GetOperationsResults<>) -> Promise<(), capnp::Error> {
