@@ -1,6 +1,5 @@
 #[macro_use(bson, doc)]
 extern crate bson;
-extern crate bzip2;
 #[macro_use]
 extern crate clap;
 extern crate mongodb;
@@ -10,14 +9,11 @@ extern crate rustc_serialize;
 extern crate time;
 
 use bson::Bson;
-use bson::spec::BinarySubtype;
-use bzip2::Compression;
-use bzip2::read::{BzDecoder, BzEncoder};
 use mongodb::ThreadedClient;
 use mongodb::db::ThreadedDatabase;
 
 use std::fs::File;
-use std::io::{Cursor, Read};
+use std::io::Read;
 
 fn main() {
     let matches = clap_app!(yogi =>
@@ -90,12 +86,6 @@ fn main() {
                 Err(e) => panic!("failed to open file : {}", e),
             };
 
-            /*let mut bz_encoder = BzEncoder::new(file, Compression::Best);
-
-            let mut buffer = Vec::new();
-            if let Err(e) = bz_encoder.read_to_end(&mut buffer) {
-                panic!("failed to read local file: {}", e);
-            }*/
             let mut buffer = String::new();
             if let Err(e) = file.read_to_string(&mut buffer) {
                 panic!("failed to read local file: {}", e);
@@ -103,7 +93,6 @@ fn main() {
 
             //create module document
             let timestamp = time::now_utc().to_timespec().sec;
-            //let content = Bson::Binary(BinarySubtype::Generic, buffer);
             let document = doc! { 
                 "timestamp" => timestamp,
                 "name" => module_name,
@@ -129,26 +118,6 @@ fn main() {
                             Err(e) => panic!("failed to retrieve document: {}", e),
                         };
 
-                        //println!("{:?}", document);
-                        /*let timestamp = document.get("timestamp").unwrap();
-                        let module_name = document.get("name").unwrap();
-                        let version = document.get("version").unwrap();
-                        let dependencies = document.get("dependencies").unwrap();
-                        let content = match document.get("content") {
-                            Some(&Bson::Binary(BinarySubtype::Generic, ref content)) => content.to_owned(),
-                            _ => panic!("could not parse 'definiton' as binary field"),
-                        };
-
-                        //decompress content
-                        let mut bz_decoder = BzDecoder::new(Cursor::new(content));
-
-                        let mut buffer = Vec::new();
-                        if let Err(e) = bz_decoder.read_to_end(&mut buffer) {
-                            panic!("failed to decompress file: {}", e);
-                        }
-
-                        let content = String::from_utf8(buffer).unwrap();
-                        println!("timestamp:{}\nname:{}\nversion:{}\ndependencies:{}\ncontent:{:?}", timestamp, module_name, version, dependencies, content);*/
                         println!("{:?}", document);
                     }
                 },
