@@ -73,11 +73,11 @@ pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, mongodb::Erro
     Client::connect(host, port)
 }
 
-pub fn find_module(client: Arc<ClientInner>, module: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, mongodb::Error> {
+pub fn find_module(client: Arc<ClientInner>, module_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, mongodb::Error> {
     //create search document
     let search_document = match version {
-        Some(search_version) => Some(doc! { "module" => module, "version" => search_version }),
-        None => Some(doc! { "module" => module }),
+        Some(search_version) => Some(doc! { "name" => module_name, "version" => search_version }),
+        None => Some(doc! { "name" => module_name }),
     };
 
     //create find options
@@ -107,13 +107,13 @@ pub fn find_module(client: Arc<ClientInner>, module: &str, version: Option<i32>,
     client.db("proddle").collection("modules").find_one(search_document, find_options)
 }
 
-pub fn find_modules(client: Arc<ClientInner>, module: Option<&str>, version: Option<i32>, limit: Option<i32>, order_by_version: bool) -> Result<Cursor, mongodb::Error> {
+pub fn find_modules(client: Arc<ClientInner>, module_name: Option<&str>, version: Option<i32>, limit: Option<i32>, order_by_version: bool) -> Result<Cursor, mongodb::Error> {
     //create search document
-    let search_document = match module {
-        Some(search_module) => {
+    let search_document = match module_name {
+        Some(search_module_name) => {
             match version {
-                Some(search_version) => Some(doc! { "module" => search_module, "version" => search_version }),
-                None => Some(doc! { "module" => search_module }),
+                Some(search_version) => Some(doc! { "name" => search_module_name, "version" => search_version }),
+                None => Some(doc! { "name" => search_module_name }),
             }
         },
         None => {
@@ -151,10 +151,10 @@ pub fn find_modules(client: Arc<ClientInner>, module: Option<&str>, version: Opt
     client.db("proddle").collection("modules").find(search_document, find_options)
 }
 
-pub fn find_operation(client: Arc<ClientInner>, domain: &str, module: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, mongodb::Error> {
+pub fn find_operation(client: Arc<ClientInner>, domain: &str, module_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, mongodb::Error> {
     //create search document
-    let search_document = match module {
-        Some(search_module) => Some(doc! { "domain" => domain, "module" => search_module }),
+    let search_document = match module_name {
+        Some(search_module_name) => Some(doc! { "domain" => domain, "module" => search_module_name }),
         None => Some(doc! { "domain" => domain }),
     };
 
@@ -185,18 +185,18 @@ pub fn find_operation(client: Arc<ClientInner>, domain: &str, module: Option<&st
     client.db("proddle").collection("operations").find_one(search_document, find_options)
 }
 
-pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, module: Option<&str>, limit: Option<i32>, order_by_timestamp: bool) -> Result<Cursor, mongodb::Error> {
+pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, module_name: Option<&str>, limit: Option<i32>, order_by_timestamp: bool) -> Result<Cursor, mongodb::Error> {
     //create search document
     let search_document = match domain {
         Some(domain) => {
-            match module {
-                Some(search_module) => Some(doc! { "domain" => domain, "module" => search_module }),
+            match module_name {
+                Some(search_module_name) => Some(doc! { "domain" => domain, "module" => search_module_name }),
                 None => Some(doc! { "domain" => domain }),
             }
         },
         None => {
-            match module {
-                Some(search_module) => Some(doc! { "module" => search_module }),
+            match module_name {
+                Some(search_module_name) => Some(doc! { "module" => search_module_name }),
                 None => None,
             }
         }

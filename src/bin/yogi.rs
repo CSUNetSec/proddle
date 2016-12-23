@@ -148,7 +148,7 @@ fn main() {
             let timestamp = time::now_utc().to_timespec().sec;
             let document = doc! {
                 "timestamp" => timestamp,
-                "name" => module_name,
+                "module" => module_name,
                 "domain" => domain,
                 "interval" => interval
             };
