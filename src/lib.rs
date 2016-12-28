@@ -100,35 +100,31 @@ impl Module {
         )
     }
 
-    pub fn from_capnproto() -> Result<Module, String> {
-        unimplemented!();
+    pub fn from_capnproto(msg: &proddle_capnp::module::Reader) -> Result<Module, String> {
+        let timestamp = match msg.get_timestamp() {
+            0 => None,
+            _ => Some(msg.get_timestamp()),
+        };
+
+        let module_name = msg.get_name().unwrap().to_owned();
+        let version = msg.get_version();
+
+        let dependencies = None; //TODO parse dependencies
+        let content = match msg.has_content() {
+            true => Some(msg.get_content().unwrap().to_owned()),
+            false => None,
+        };
+
+        Ok(
+            Module {
+                timestamp: timestamp,
+                name: module_name,
+                version: version,
+                dependencies: dependencies,
+                content: content,
+            }
+        )
     }
-}
-
-/*
- * CAPNPROTO BUILDERS
- */
-pub fn build_module<'a>(msg: &'a mut proddle_capnp::module::Builder, timestamp: Option<u64>, name: &str, version: u16, dependencies: Option<Vec<&str>>, content: Option<&str>) -> Result<(), String> {
-    if let Some(timestamp) = timestamp {
-        msg.set_timestamp(timestamp);
-    }
-
-    msg.set_name(name);
-    msg.set_version(version);
-
-    if let Some(_) = dependencies {
-        //TODO set dependencies
-        /*let mut msg_dependencies = msg.init_dependencies(dependencies.len() as u32);
-        for (i, dependency) in dependencies.iter().enumerate() {
-            msg_dependencies.set(i as u32, dependency);
-        }*/
-    }
-
-    if let Some(content) = content {
-        msg.set_content(content);
-    }
-
-    Ok(())
 }
 
 /*

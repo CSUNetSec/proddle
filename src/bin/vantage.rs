@@ -8,6 +8,7 @@ use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use gj::EventLoop;
+use proddle::Module;
 use proddle::proddle_capnp::proddle::Client;
 
 use std::collections::HashMap;
@@ -56,7 +57,12 @@ fn main() {
         let result_modules = try!(reader.get_modules());
 
         for result_module in result_modules.iter() {
-            println!("PROCESSING MODULE {},{},{}", result_module.get_timestamp(), result_module.get_name().unwrap(), result_module.get_version());
+            let module = match Module::from_capnproto(&result_module) {
+                Ok(module) => module,
+                Err(e) => panic!("failed to parse capnproto to module: {}", e),
+            };
+
+            println!("PROCESSING MODULE {},{}", module.name, module.version);
         }
 
         Ok(())
