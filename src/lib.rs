@@ -109,7 +109,11 @@ impl Module {
         let module_name = msg.get_name().unwrap().to_owned();
         let version = msg.get_version();
 
-        let dependencies = None; //TODO parse dependencies
+        let dependencies = match msg.has_dependencies() {
+            true => Some(msg.get_dependencies().unwrap().iter().map(|x| x.unwrap().to_string()).collect()),
+            false => None,
+        };
+
         let content = match msg.has_content() {
             true => Some(msg.get_content().unwrap().to_owned()),
             false => None,

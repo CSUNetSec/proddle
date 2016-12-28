@@ -16,6 +16,8 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 
 fn main() {
+    let mut modules: HashMap<String, Module> = HashMap::new();
+
     let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
         //open stream
         let mut event_port = try!(gjio::EventPort::new());
@@ -32,30 +34,28 @@ fn main() {
         let mut rpc_system = RpcSystem::new(network, None);
         let proddle: Client = rpc_system.bootstrap(Side::Server);
 
-        //TODO execute command for client
+        //populate request modules
         let mut request = proddle.get_modules_request();
         {
-            let mut request_modules = request.get().init_modules(2);
-            /*for module in 0..module_count {
-                let mut bucket_hash = bucket_hashes.borrow().get(bucket);
-                bucket_hash.set_bucket(0);
-                bucket_hash.set_hash(0);
-            }*/
-            {   
-                let mut request_module = request_modules.borrow().get(0);
-                request_module.set_name("core/veil.py");
-                request_module.set_version(1);
-            }
+            let mut request_modules = request.get().init_modules(modules.len() as u32);
+            for (i, module) in modules.values().enumerate() {
+                let mut request_module = request_modules.borrow().get(i as u32);
 
-            let mut request_module = request_modules.borrow().get(1);
-            request_module.set_name("core/shadow.py");
-            request_module.set_version(2);
+                if let Some(timestamp) = module.timestamp {
+                    request_module.set_timestamp(timestamp);
+                }
+
+                request_module.set_name(&module.name);
+                request_module.set_version(module.version);
+            }
         }
 
+        //send request
         let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
         let reader = try!(response.get());
         let result_modules = try!(reader.get_modules());
 
+        //process result modules
         for result_module in result_modules.iter() {
             let module = match Module::from_capnproto(&result_module) {
                 Ok(module) => module,
@@ -63,6 +63,12 @@ fn main() {
             };
 
             println!("PROCESSING MODULE {},{}", module.name, module.version);
+
+            if module.version == 0 {
+                modules.remove(&module.name);
+            } else {
+                modules.insert(module.name.to_owned(), module);
+            }
         }
 
         Ok(())
