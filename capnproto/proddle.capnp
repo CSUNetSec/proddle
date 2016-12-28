@@ -21,7 +21,7 @@ struct Module {
 
 # Operation Definition
 struct Operation {
-    id @0 :UInt64;
+    timestamp @0 :UInt64;
     domain @1 :Text;
     module @2 :Text;
     interval @3 :UInt32;
@@ -29,5 +29,5 @@ struct Operation {
 
 struct OperationBucket {
     bucket @0: UInt64;
-    operataions @1 :List(Operation);
+    operations @1 :List(Operation);
 }

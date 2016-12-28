@@ -12,12 +12,13 @@ use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use gj::{EventLoop, TaskReaper, TaskSet};
 use gjio::SocketListener;
-use proddle::Module;
+use proddle::{Module, Operation};
 use proddle::proddle_capnp::proddle::{GetModulesParams, GetModulesResults, GetOperationsParams, GetOperationsResults};
 use proddle::proddle_capnp::proddle::{Client, Server, ToClient};
 
-use std::collections::HashMap;
-use std::collections::hash_map::Entry;
+use std::collections::{BTreeMap, HashMap};
+use std::collections::hash_map::{DefaultHasher, Entry};
+use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -182,7 +183,97 @@ impl Server for ServerImpl {
         Promise::ok(())
     }
 
-    fn get_operations(&mut self, _: GetOperationsParams<>, _: GetOperationsResults<>) -> Promise<(), capnp::Error> {
+    fn get_operations(&mut self, params: GetOperationsParams<>, mut results: GetOperationsResults<>) -> Promise<(), capnp::Error> {
+        let params = pry!(params.get());
+        let param_bucket_hashes = pry!(params.get_bucket_hashes());
+
+        //initialize server side bucket hashes
+        let mut bucket_hashes = BTreeMap::new();
+        let mut operations: BTreeMap<u64, Vec<Operation>> = BTreeMap::new();
+        for bucket_hash in param_bucket_hashes.iter() {
+            bucket_hashes.insert(bucket_hash.get_bucket(), DefaultHasher::new());
+            operations.insert(bucket_hash.get_bucket(), Vec::new());
+        }
+        
+        //connect to mongodb
+        let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
+            Ok(client) => client,
+            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to connect to mongodb: {}", e))),
+        };
+
+        //iterate over operations in mongodb and store in operations map
+        match proddle::find_operations(client.clone(), None, None, None, false) {
+            Ok(cursor) => {
+                for document in cursor {
+                    let document = match document {
+                        Ok(document) => document,
+                        Err(e) => {
+                            println!("failed to fetch document: {}", e);
+                            continue;
+                        }
+                    };
+
+                    //parse mongodb document into module
+                    let operation = match Operation::from_mongodb(&document) {
+                        Ok(operation) => operation,
+                        Err(e) => panic!("failed to parse mongodb document into operation: {}", e),
+                    };
+
+                    //hash domain to determine bucket key
+                    let domain_hash = proddle::hash_string(&operation.domain);
+                    let bucket_key = match proddle::get_bucket_key(&bucket_hashes, domain_hash) {
+                        Some(bucket_key) => bucket_key,
+                        None => panic!("failed to determine correct bucket key for domain hash: {}", domain_hash),
+                    };
+
+                    //add operation to bucket hashes and operations maps
+                    match bucket_hashes.get_mut(&bucket_key) {
+                        Some(mut hasher) => operation.hash(hasher),
+                        None => panic!("failed to retrieve hasher: {}", bucket_key),
+                    };
+
+                    match operations.get_mut(&bucket_key) {
+                        Some(mut vec) => vec.push(operation),
+                        None => panic!("failed to retrieve bucket: {}", bucket_key),
+                    };
+                }
+            },
+            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve operations: {}", e))),
+        }
+
+        //compare vantage hashes to server hashes
+        for param_bucket_hash in param_bucket_hashes.iter() {
+            let bucket_key = param_bucket_hash.get_bucket();
+
+            //if vantage hash equals server hash remove vector of operations from operations
+            let bucket_hash = bucket_hashes.get(&bucket_key).unwrap().finish();
+            if bucket_hash == param_bucket_hash.get_hash() {
+                operations.remove(&bucket_key);
+            }
+        }
+
+        //create results message
+        let mut result_operation_buckets = results.get().init_operation_buckets(operations.len() as u32);
+        for (i, (bucket_key, operation_vec)) in operations.iter().enumerate() {
+            //populate operation bucket
+            let mut result_operation_bucket = result_operation_buckets.borrow().get(i as u32);
+            result_operation_bucket.set_bucket(*bucket_key);
+
+            let mut result_operations = result_operation_bucket.init_operations(operation_vec.len() as u32);
+            for (j, operation) in operation_vec.iter().enumerate() {
+                //populate operations
+                let mut result_operation = result_operations.borrow().get(j as u32);
+
+                if let Some(timestamp) = operation.timestamp {
+                    result_operation.set_timestamp(timestamp);
+                }
+
+                result_operation.set_domain(&operation.domain);
+                result_operation.set_module(&operation.module);
+                result_operation.set_interval(operation.interval);
+            }
+        }
+
         Promise::err(capnp::Error::unimplemented("method not implemented".to_string()))
     }
 }

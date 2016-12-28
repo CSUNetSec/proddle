@@ -131,6 +131,54 @@ impl Module {
     }
 }
 
+pub struct Operation {
+    pub timestamp: Option<u64>,
+    pub domain: String,
+    pub module: String,
+    pub interval: u32,
+}
+
+impl Operation {
+    pub fn from_mongodb(document: &OrderedDocument) -> Result<Operation, String> {
+        let timestamp = match document.get("timestamp") {
+            Some(&Bson::I64(timestamp)) => Some(timestamp as u64),
+            _ => return Err("failed to parse timestamp as i64".to_owned()),
+        };
+
+        let domain = match document.get("domain") {
+            Some(&Bson::String(ref name)) => name.to_owned(),
+            _ => return Err("failed to domain as string".to_owned()),
+        };
+
+        let module = match document.get("module") {
+            Some(&Bson::String(ref name)) => name.to_owned(),
+            _ => return Err("failed to parse module name as string".to_owned()),
+        };
+
+        let interval = match document.get("interval") {
+            Some(&Bson::I32(interval)) => interval as u32,
+            _ => return Err("failed to parse interval as i32".to_owned()),
+        };
+
+        Ok(
+            Operation {
+                timestamp: timestamp,
+                domain: domain,
+                module: module,
+                interval: interval,
+            }
+        )
+    }
+}
+
+impl Hash for Operation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.timestamp.hash(state);
+        self.domain.hash(state);
+        self.module.hash(state);
+    }
+}
+
 /*
  * MONGODB
  */
