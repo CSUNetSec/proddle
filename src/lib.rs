@@ -7,6 +7,7 @@ pub mod proddle_capnp {
     include!(concat!(env!("OUT_DIR"), "/proddle_capnp.rs"));
 }
 
+use bson::Bson;
 use bson::ordered::OrderedDocument;
 use mongodb::{Client, ClientInner, ThreadedClient};
 use mongodb::coll::options::{CursorType, FindOptions};
@@ -38,6 +39,70 @@ pub fn get_bucket_key(map: &BTreeMap<u64, DefaultHasher>, key: u64) -> Option<u6
     }
 
     Some(bucket_key)
+}
+
+/*
+ *
+ */
+pub struct Module {
+    pub timestamp: Option<u64>,
+    pub name: String,
+    pub version: u16,
+    pub dependencies: Option<Vec<String>>,
+    pub content: Option<String>,
+}
+
+impl Module {
+    pub fn new(timestamp: Option<u64>, name: String, version: u16, dependencies: Option<Vec<String>>, content: Option<String>) -> Module {
+        Module {
+            timestamp: timestamp,
+            name: name,
+            version: version,
+            dependencies: dependencies,
+            content: content,
+        }
+    }
+
+    pub fn from_mongodb(document: &OrderedDocument) -> Result<Module, String> {
+        let timestamp = match document.get("timestamp") {
+            Some(&Bson::I64(timestamp)) => Some(timestamp as u64),
+            _ => return Err("failed to parse timestamp as i64".to_owned()),
+        };
+
+        let module_name = match document.get("name") {
+            Some(&Bson::String(ref name)) => name.to_owned(),
+            _ => return Err("failed to parse name as string".to_owned()),
+        };
+
+        let version = match document.get("version") {
+            Some(&Bson::I32(version)) => version as u16,
+            _ => return Err("failed to parse version as i32".to_owned()),
+        };
+
+        let dependencies: Option<Vec<String>> = match document.get("dependencies") {
+            Some(&Bson::Array(ref dependencies)) => Some(dependencies.iter().map(|x| x.to_string()).collect()),
+            _ => return Err("failed to parse dependencies as array".to_owned()),
+        };
+        
+        let content = match document.get("content") {
+            Some(&Bson::String(ref content)) => Some(content.to_owned()),
+            _ => return Err("failed to parse content as string".to_owned()),
+        };
+
+        Ok(
+            Module {
+                timestamp: timestamp,
+                name: module_name,
+                version: version,
+                dependencies: dependencies,
+                content: content,
+            }
+        )
+    }
+
+    pub fn from_capnproto() -> Result<Module, String> {
+        unimplemented!();
+    }
 }
 
 /*

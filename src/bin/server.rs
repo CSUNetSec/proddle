@@ -6,13 +6,13 @@ extern crate gj;
 extern crate gjio;
 extern crate proddle;
 
-use bson::Bson;
 use capnp::capability::Promise;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use gj::{EventLoop, TaskReaper, TaskSet};
 use gjio::SocketListener;
+use proddle::Module;
 use proddle::proddle_capnp::proddle::{GetModulesParams, GetModulesResults, GetOperationsParams, GetOperationsResults};
 use proddle::proddle_capnp::proddle::{Client, Server, ToClient};
 
@@ -86,7 +86,6 @@ impl ServerImpl {
 impl Server for ServerImpl {
     fn get_modules(&mut self, params: GetModulesParams<>, mut results: GetModulesResults<>) -> Promise<(), capnp::Error> {
         let params = pry!(params.get());
-        //let bucket_hashes = pry!(params.get_bucket_hashes());
         let param_modules = pry!(params.get_modules());
         
         //connect to mongodb
@@ -108,48 +107,28 @@ impl Server for ServerImpl {
                         }
                     };
 
-                    //check if this is the newest version of module we've seen
-                    let timestamp = match document.get("timestamp") {
-                        Some(&Bson::I64(timestamp)) => timestamp as u64,
-                        _ => panic!("failed to parse timestamp as i64"),
-                    };
-
-                    let module_name = match document.get("name") {
-                        Some(&Bson::String(ref name)) => name.to_owned(),
-                        _ => panic!("failed to parse name as string"),
-                    };
-
-                    let version = match document.get("version") {
-                        Some(&Bson::I32(version)) => version as u16,
-                        _ => panic!("failed to parse version as i32"),
-                    };
-
-                    let dependencies: Vec<String> = match document.get("dependencies") {
-                        Some(&Bson::Array(ref dependencies)) => dependencies.iter().map(|x| x.to_string()).collect(),
-                        _ => panic!("failed to parse dependencies as array"),
-                    };
-                    
-                    let content = match document.get("content") {
-                        Some(&Bson::String(ref content)) => content.to_owned(),
-                        _ => panic!("failed to parse content as string"),
+                    //parse mongodb document into module
+                    let module = match Module::from_mongodb(&document) {
+                        Ok(module) => module,
+                        Err(e) => panic!("failed to parse mongodb document into module: {}", e),
                     };
 
                     //check if module name already exists and/or version comparrison
-                    let entry = modules.entry(module_name.to_owned());
+                    let entry = modules.entry(module.name.to_owned());
                     if let Entry::Occupied(mut occupied_entry) = entry {
                         let replace;
                         {
-                            let entry: &(Option<u64>, String, u16, Option<Vec<String>>, Option<String>) = occupied_entry.get();
-                            replace = version > entry.2;
+                            let entry: &Module = occupied_entry.get();
+                            replace = module.version > entry.version;
                         }
                         
                         //if version is newer then replace
                         if replace {
-                            occupied_entry.insert((Some(timestamp), module_name, version, Some(dependencies), Some(content)));
+                            occupied_entry.insert(module);
                         }
                     } else if let Entry::Vacant(vacant_entry) = entry {
                         //if entry does not exist then insert
-                        vacant_entry.insert((Some(timestamp), module_name, version, Some(dependencies), Some(content)));
+                        vacant_entry.insert(module);
                     }
                 }
             },
@@ -166,33 +145,37 @@ impl Server for ServerImpl {
             let entry = modules.entry(module_name.to_owned());
             if let Entry::Occupied(occupied_entry) = entry {
                 //if vantage version is up to date remove from mongodb map
-                if module.get_version() >= occupied_entry.get().2 {
+                if module.get_version() >= occupied_entry.get().version {
                     occupied_entry.remove();
                 }
             } else if let Entry::Vacant(vacant_entry) = entry {
                 //if mongodb map doens't contain remove from vantage
-                vacant_entry.insert((None, module_name.to_owned(), 0, None, None));
+                vacant_entry.insert(Module::new(None, module_name.to_owned(), 0, None, None));
             }
         }
 
         //create results message
         let mut results_modules = results.get().init_modules(modules.len() as u32);
-        for (i, tuple) in modules.values().enumerate() {
-            //make dependencies and content a string reference to avoid copying
-            let dependencies: Option<Vec<&str>> = match tuple.3 {
-                Some(ref dependencies) => Some(dependencies.iter().map(|x| x.as_ref()).collect()),
-                None => None,
-            };
-            
-            let content = match tuple.4 {
-                Some(ref content) => Some(content.as_ref()),
-                None => None,
-            };
-
+        for (i, entry) in modules.values().enumerate() {
+            //populate module
             let mut module = results_modules.borrow().get(i as u32);
-            if let Err(e) = proddle::build_module(&mut module, tuple.0, &tuple.1, tuple.2, dependencies, content) {
-                println!("{}", e);
-                continue;
+
+            if let Some(timestamp) = entry.timestamp {
+                module.set_timestamp(timestamp);
+            }
+
+            module.set_name(&entry.name);
+            module.set_version(entry.version);
+
+            if let Some(ref dependencies) = entry.dependencies {
+                let mut module_dependencies = module.borrow().init_dependencies(dependencies.len() as u32);
+                for (i, dependency) in dependencies.iter().enumerate() {
+                    module_dependencies.set(i as u32, dependency);
+                }
+            }
+
+            if let Some(ref content) = entry.content {
+                module.set_content(&content);
             }
         }
 

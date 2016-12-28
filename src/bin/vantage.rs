@@ -10,6 +10,7 @@ use capnp_rpc::rpc_twoparty_capnp::Side;
 use gj::EventLoop;
 use proddle::proddle_capnp::proddle::Client;
 
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -33,29 +34,29 @@ fn main() {
         //TODO execute command for client
         let mut request = proddle.get_modules_request();
         {
-            let mut modules = request.get().init_modules(2);
+            let mut request_modules = request.get().init_modules(2);
             /*for module in 0..module_count {
                 let mut bucket_hash = bucket_hashes.borrow().get(bucket);
                 bucket_hash.set_bucket(0);
                 bucket_hash.set_hash(0);
             }*/
             {   
-                let mut module = modules.borrow().get(0);
-                module.set_name("core/veil.py");
-                module.set_version(1);
+                let mut request_module = request_modules.borrow().get(0);
+                request_module.set_name("core/veil.py");
+                request_module.set_version(1);
             }
 
-            let mut module = modules.borrow().get(1);
-            module.set_name("core/shadow.py");
-            module.set_version(2);
+            let mut request_module = request_modules.borrow().get(1);
+            request_module.set_name("core/shadow.py");
+            request_module.set_version(2);
         }
 
         let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
         let reader = try!(response.get());
-        let modules = try!(reader.get_modules());
+        let result_modules = try!(reader.get_modules());
 
-        for module in modules.iter() {
-            println!("PROCESSING MODULE {},{},{}", module.get_timestamp(), module.get_name().unwrap(), module.get_version());
+        for result_module in result_modules.iter() {
+            println!("PROCESSING MODULE {},{},{}", result_module.get_timestamp(), result_module.get_name().unwrap(), result_module.get_version());
         }
 
         Ok(())
