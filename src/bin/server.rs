@@ -274,6 +274,6 @@ impl Server for ServerImpl {
             }
         }
 
-        Promise::err(capnp::Error::unimplemented("method not implemented".to_string()))
+        Promise::ok(())
     }
 }
