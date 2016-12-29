@@ -14,6 +14,8 @@ use proddle::proddle_capnp::proddle::Client;
 
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::{BinaryHeap, HashMap};
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -107,20 +109,24 @@ fn main() {
 
         //process result operations
         for result_operation_bucket in result_operation_buckets.iter() {
-            //TODO change bucket hash in vantage data structure operation_bucket_hashes
             let mut binary_heap = BinaryHeap::new();
+            let mut hasher = DefaultHasher::new();
             for result_operation in try!(result_operation_bucket.get_operations()).iter() {
                 //println!("PROCESSING OPERATION {} - {}", result_operation.get_domain().unwrap(), result_operation.get_module().unwrap());
 
                 //add operation to binary heap
                 match Operation::from_capnproto(&result_operation) {
-                    Ok(operation) => binary_heap.push(OperationJob::new(operation)),
+                    Ok(operation) => {
+                        operation.hash(&mut hasher);
+                        binary_heap.push(OperationJob::new(operation));
+                    },
                     Err(e) => panic!("failed to parse capnproto to operation: {}", e),
                 };
             }
 
             //insert new operations into operations map
             operations.insert(result_operation_bucket.get_bucket(), binary_heap);
+            operation_bucket_hashes.insert(result_operation_bucket.get_bucket(), hasher.finish());
         }
 
         Ok(())
