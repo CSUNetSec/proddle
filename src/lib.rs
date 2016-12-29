@@ -131,6 +131,7 @@ impl Module {
     }
 }
 
+#[derive(Clone)]
 pub struct Operation {
     pub timestamp: Option<u64>,
     pub domain: String,
@@ -159,6 +160,26 @@ impl Operation {
             Some(&Bson::I32(interval)) => interval as u32,
             _ => return Err("failed to parse interval as i32".to_owned()),
         };
+
+        Ok(
+            Operation {
+                timestamp: timestamp,
+                domain: domain,
+                module: module,
+                interval: interval,
+            }
+        )
+    }
+
+    pub fn from_capnproto(msg: &proddle_capnp::operation::Reader) -> Result<Operation, String> {
+        let timestamp = match msg.get_timestamp() {
+            0 => None,
+            _ => Some(msg.get_timestamp()),
+        };
+
+        let domain = msg.get_domain().unwrap().to_owned();
+        let module = msg.get_module().unwrap().to_owned();
+        let interval = msg.get_interval();
 
         Ok(
             Operation {
