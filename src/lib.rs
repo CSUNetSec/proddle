@@ -20,7 +20,7 @@ use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 /*
- * HASHING
+ * Miscellaneous
  */
 pub fn hash_string(value: &str) -> u64 {
     let mut hasher = DefaultHasher::new();
@@ -42,7 +42,7 @@ pub fn get_bucket_key(map: &BTreeMap<u64, DefaultHasher>, key: u64) -> Option<u6
 }
 
 /*
- *
+ * Module
  */
 pub struct Module {
     pub timestamp: Option<u64>,
@@ -131,6 +131,10 @@ impl Module {
     }
 }
 
+/*
+ * Operation
+ */
+
 #[derive(Clone)]
 pub struct Operation {
     pub timestamp: Option<u64>,
@@ -201,7 +205,7 @@ impl Hash for Operation {
 }
 
 /*
- * MONGODB
+ * MongoDB
  */
 pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, mongodb::Error> {
     Client::connect(host, port)
