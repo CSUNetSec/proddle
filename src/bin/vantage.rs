@@ -4,6 +4,7 @@ extern crate gj;
 extern crate gjio;
 extern crate proddle;
 extern crate time;
+extern crate threadpool;
 
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
@@ -11,6 +12,7 @@ use capnp_rpc::rpc_twoparty_capnp::Side;
 use gj::EventLoop;
 use proddle::{Module, Operation};
 use proddle::proddle_capnp::proddle::Client;
+use threadpool::ThreadPool;
 
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::{BinaryHeap, HashMap};
@@ -43,6 +45,8 @@ fn main() {
     //start thread for scheduling operations
     let thread_operations = operations.clone();
     std::thread::spawn(move || {
+        let thread_pool = ThreadPool::new(8);
+
         loop {
             let now = time::now_utc().to_timespec().sec;
 
@@ -58,10 +62,13 @@ fn main() {
 
                         if execution_time < now {
                             let mut operation_job = operation_jobs.pop().unwrap();
-                            println!("EXECUTING OPERATION {} {}", operation_job.operation.domain, operation_job.operation.module);
-
+                            let pool_operation_job = operation_job.clone();
                             operation_job.execution_time += operation_job.operation.interval as i64;
                             operation_jobs.push(operation_job);
+
+                            thread_pool.execute(move || {
+                                println!("EXECUTING OPERATION {} {}", pool_operation_job.operation.domain, pool_operation_job.operation.module);
+                            });
                         } else {
                             break;
                         }
