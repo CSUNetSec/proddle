@@ -17,19 +17,26 @@ use threadpool::ThreadPool;
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::{BinaryHeap, HashMap};
 use std::collections::hash_map::DefaultHasher;
+use std::fs::File;
 use std::hash::{Hash, Hasher};
+use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 fn main() {
+    //initialize vantage parameters
+    let modules_directory = "/tmp";
+    let bucket_count = 10;
+    let thread_count = 8;
+
+    //initialize vantage data structures
     let modules: Arc<RwLock<HashMap<String, Module>>> = Arc::new(RwLock::new(HashMap::new()));
     let operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>> = Arc::new(RwLock::new(HashMap::new()));
     let operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>> = Arc::new(RwLock::new(HashMap::new()));
 
     //populate operations with buckets
     {
-        let bucket_count = 10;
         let mut operations = operations.write().unwrap();
         let mut operation_bucket_hashes = operation_bucket_hashes.write().unwrap();
 
@@ -44,8 +51,9 @@ fn main() {
 
     //start thread for scheduling operations
     let thread_operations = operations.clone();
+    let thread_modules_directory = modules_directory.clone();
     std::thread::spawn(move || {
-        let thread_pool = ThreadPool::new(8);
+        let thread_pool = ThreadPool::new(thread_count);
 
         loop {
             let now = time::now_utc().to_timespec().sec;
@@ -67,6 +75,7 @@ fn main() {
                             operation_jobs.push(operation_job);
 
                             thread_pool.execute(move || {
+                                println!("{}", thread_modules_directory);
                                 println!("EXECUTING OPERATION {} {}", pool_operation_job.operation.domain, pool_operation_job.operation.module);
                             });
                         } else {
@@ -136,8 +145,30 @@ fn main() {
                     //println!("PROCESSING MODULE {} - {}",  module.name, module.version);
 
                     if module.version == 0 {
+                        //delete file
+                        if let Err(e) =  std::fs::remove_file(format!("{}/{}", modules_directory, module.name)) {
+                            panic!("failed to delete module file '{}': {}", module.name, e);
+                        }
+
+                        //remove from modules data structures
                         modules.remove(&module.name);
                     } else {
+                        //create file
+                        let mut file = match File::create(format!("{}/{}", modules_directory, module.name)) {
+                            Ok(file) => file,
+                            Err(e) => panic!("failed to create modules file '{}': {}", module.name, e),
+                        };
+
+                        let content = module.content.clone().unwrap().into_bytes();
+                        if let Err(e) = file.write_all(&content) {
+                            panic!("failed to write content to module file '{}': {}", module.name, e);
+                        }
+
+                        if let Err(e) = file.flush() {
+                            panic!("failed to flush file content to module file '{}': {}", module.name, e);
+                        }
+
+                        //add to modules data structure
                         modules.insert(module.name.to_owned(), module);
                     }
                 }
