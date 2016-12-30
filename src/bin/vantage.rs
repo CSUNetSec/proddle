@@ -21,6 +21,7 @@ use std::fs::File;
 use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::net::SocketAddr;
+use std::process::Command;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
@@ -51,7 +52,6 @@ fn main() {
 
     //start thread for scheduling operations
     let thread_operations = operations.clone();
-    let thread_modules_directory = modules_directory.clone();
     std::thread::spawn(move || {
         let thread_pool = ThreadPool::new(thread_count);
 
@@ -75,8 +75,15 @@ fn main() {
                             operation_jobs.push(operation_job);
 
                             thread_pool.execute(move || {
-                                println!("{}", thread_modules_directory);
-                                println!("EXECUTING OPERATION {} {}", pool_operation_job.operation.domain, pool_operation_job.operation.module);
+                                let output = match Command::new("python")
+                                                    .arg(format!("{}/{}", modules_directory, pool_operation_job.operation.module))
+                                                    .arg(pool_operation_job.operation.domain)
+                                                    .output() {
+                                    Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
+                                    Err(e) => format!("\"Error\":true,\"ErrorMessage\":\"{}\"", e),
+                                };
+
+                                println!("{}", output);
                             });
                         } else {
                             break;

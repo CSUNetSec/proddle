@@ -23,13 +23,18 @@ try:
 
     #print information
     print('{', end='')
+    print('"Error":false,', end='')
     print('"HTTPStatusCode":%d,' % c.getinfo(c.RESPONSE_CODE), end='')
     print('"ApplicationLayerLatency":%f,' % c.getinfo(c.TOTAL_TIME), end='')
     print('"PrimaryIP":"%s",' % c.getinfo(c.PRIMARY_IP), end='')
     print('"RedirectCount":%d' % c.getinfo(c.REDIRECT_COUNT), end='')
-    print('}', flush=True)
+    print('}', end='', flush=True)
 except:
-    print('error')
+    e = sys.exc_info()[0] #catch all errors
+    print('{', end='')
+    print('"Error":true,', end='')
+    print('"ErrorMessage":"%s"' % c.errstr(), end='')
+    print('}', end='', flush=True)
 
 #close curl handle
 c.close()
