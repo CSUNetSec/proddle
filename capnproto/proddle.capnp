@@ -3,6 +3,7 @@
 interface Proddle {
     getModules @0 (modules :List(Module)) -> (modules :List(Module));
     getOperations @1 (bucketHashes :List(BucketHash)) -> (operationBuckets :List(OperationBucket));
+    sendResults @2 (results: List(Result)) -> ();
 }
 
 struct BucketHash {
@@ -30,4 +31,9 @@ struct Operation {
 struct OperationBucket {
     bucket @0: UInt64;
     operations @1 :List(Operation);
+}
+
+# Result Definition
+struct Result {
+    jsonString @0: Text;
 }

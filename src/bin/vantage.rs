@@ -24,12 +24,16 @@ use std::net::SocketAddr;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
+use std::sync::mpsc::channel;
 
 fn main() {
     //initialize vantage parameters
     let modules_directory = "/tmp";
     let bucket_count = 10;
     let thread_count = 8;
+    //TODO server address
+    //TODO server poll interval seconds
+    //TODO result batch size
 
     //initialize vantage data structures
     let modules: Arc<RwLock<HashMap<String, Module>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -49,6 +53,68 @@ fn main() {
             counter += delta;
         }
     }
+
+    //create result channels
+    let (tx, rx) = channel();
+
+    //start recv result channel
+    std::thread::spawn(move || {
+        let mut result_buffer: Vec<String> = Vec::new();
+
+        loop {
+            match rx.recv() {
+                Ok(result) => result_buffer.push(result),
+                Err(e) => panic!("failed to retrieve result from result channel: {}", e),
+            };
+
+            if result_buffer.len() == 2 {
+                //send results to a server
+                {
+                    let result_buffer_borrow = &result_buffer;
+                    let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
+                        //open stream
+                        let mut event_port = try!(gjio::EventPort::new());
+                        let socket_addr = match SocketAddr::from_str(&format!("127.0.0.1:12289")) {
+                            Ok(socket_addr) => socket_addr,
+                            Err(e) => panic!("failed to parse socket address: {}", e),
+                        };
+
+                        let tcp_address = event_port.get_network().get_tcp_address(socket_addr);
+                        let stream = try!(tcp_address.connect().wait(wait_scope, &mut event_port));
+
+                        //connect rpc client
+                        let network = Box::new(VatNetwork::new(stream.clone(), stream, Side::Client, Default::default()));
+                        let mut rpc_system = RpcSystem::new(network, None);
+                        let proddle: Client = rpc_system.bootstrap(Side::Server);
+
+                        //send results
+                        let mut request = proddle.send_results_request();
+                        {
+                            let mut request_results = request.get().init_results(result_buffer_borrow.len() as u32);
+                            for (i, result) in result_buffer_borrow.iter().enumerate() {
+                                let mut request_result = request_results.borrow().get(i as u32);
+                                request_result.set_json_string(result);
+                            }
+                        }
+
+                        //send results request
+                        let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
+                        let reader = try!(response.get());
+                        //let result_modules = try!(reader.get_modules());
+
+                        Ok(())
+                    });
+
+                    if let Err(e) = result {
+                        panic!("send results event loop failed: {}", e);
+                    }
+                }
+
+                //clear result buffer
+                result_buffer.clear();
+            }
+        }
+    });
 
     //start thread for scheduling operations
     let thread_operations = operations.clone();
@@ -74,6 +140,7 @@ fn main() {
                             operation_job.execution_time += operation_job.operation.interval as i64;
                             operation_jobs.push(operation_job);
 
+                            let pool_tx = tx.clone();
                             thread_pool.execute(move || {
                                 let output = match Command::new("python")
                                                     .arg(format!("{}/{}", modules_directory, pool_operation_job.operation.module))
@@ -83,7 +150,9 @@ fn main() {
                                     Err(e) => format!("\"Error\":true,\"ErrorMessage\":\"{}\"", e),
                                 };
 
-                                println!("{}", output);
+                                if let Err(e) = pool_tx.send(output) {
+                                    panic!("failed to send result over result channel: {}", e);
+                                }
                             });
                         } else {
                             break;
@@ -229,7 +298,7 @@ fn main() {
         });
 
         if let Err(e) = result {
-            panic!("event loop failed: {}", e);
+            panic!("get modules/operations event loop failed: {}", e);
         }
 
         std::thread::sleep(std::time::Duration::new(1440, 0))

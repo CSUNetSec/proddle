@@ -13,7 +13,7 @@ use capnp_rpc::rpc_twoparty_capnp::Side;
 use gj::{EventLoop, TaskReaper, TaskSet};
 use gjio::SocketListener;
 use proddle::{Module, Operation};
-use proddle::proddle_capnp::proddle::{GetModulesParams, GetModulesResults, GetOperationsParams, GetOperationsResults};
+use proddle::proddle_capnp::proddle::{GetModulesParams, GetModulesResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
 use proddle::proddle_capnp::proddle::{Client, Server, ToClient};
 
 use std::collections::{BTreeMap, HashMap};
@@ -272,6 +272,25 @@ impl Server for ServerImpl {
                 result_operation.set_module(&operation.module);
                 result_operation.set_interval(operation.interval);
             }
+        }
+
+        Promise::ok(())
+    }
+
+    fn send_results(&mut self, params: SendResultsParams<>, _: SendResultsResults<>) -> Promise<(), capnp::Error> {
+        let params = pry!(params.get());
+        let param_results = pry!(params.get_results());
+
+        //connect to mongodb
+        let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
+            Ok(client) => client,
+            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to connect to mongodb: {}", e))),
+        };
+
+        //iterate over results
+        for param_result in param_results.iter() {
+            let json_string = param_result.get_json_string().unwrap();
+            println!("{}", json_string);
         }
 
         Promise::ok(())
