@@ -31,9 +31,9 @@ fn main() {
     let modules_directory = "/tmp";
     let bucket_count = 10;
     let thread_count = 8;
-    //TODO server address
-    //TODO server poll interval seconds
-    //TODO result batch size
+    let server_address = "127.0.0.1:12289";
+    let server_poll_interval_seconds = 1440;
+    let result_batch_size = 100;
 
     //initialize vantage data structures
     let modules: Arc<RwLock<HashMap<String, Module>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -67,14 +67,14 @@ fn main() {
                 Err(e) => panic!("failed to retrieve result from result channel: {}", e),
             };
 
-            if result_buffer.len() == 2 {
+            if result_buffer.len() == result_batch_size {
                 //send results to a server
                 {
                     let result_buffer_borrow = &result_buffer;
                     let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
                         //open stream
                         let mut event_port = try!(gjio::EventPort::new());
-                        let socket_addr = match SocketAddr::from_str(&format!("127.0.0.1:12289")) {
+                        let socket_addr = match SocketAddr::from_str(server_address) {
                             Ok(socket_addr) => socket_addr,
                             Err(e) => panic!("failed to parse socket address: {}", e),
                         };
@@ -147,7 +147,7 @@ fn main() {
                                                     .arg(pool_operation_job.operation.domain)
                                                     .output() {
                                     Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
-                                    Err(e) => format!("\"Error\":true,\"ErrorMessage\":\"{}\"", e),
+                                    Err(e) => format!("{\"Error\":true,\"ErrorMessage\":\"{}\"}", e),
                                 };
 
                                 if let Err(e) = pool_tx.send(output) {
@@ -174,7 +174,7 @@ fn main() {
         let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
             //open stream
             let mut event_port = try!(gjio::EventPort::new());
-            let socket_addr = match SocketAddr::from_str(&format!("127.0.0.1:12289")) {
+            let socket_addr = match SocketAddr::from_str(server_address) {
                 Ok(socket_addr) => socket_addr,
                 Err(e) => panic!("failed to parse socket address: {}", e),
             };
@@ -301,7 +301,7 @@ fn main() {
             panic!("get modules/operations event loop failed: {}", e);
         }
 
-        std::thread::sleep(std::time::Duration::new(1440, 0))
+        std::thread::sleep(std::time::Duration::new(server_poll_interval_seconds, 0))
     }
 }
 
