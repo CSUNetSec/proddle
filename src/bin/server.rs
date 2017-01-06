@@ -4,17 +4,23 @@ extern crate capnp_rpc;
 #[macro_use]
 extern crate gj;
 extern crate gjio;
+extern crate mongodb;
 extern crate proddle;
+extern crate rustc_serialize;
 
+use bson::Bson;
 use capnp::capability::Promise;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use gj::{EventLoop, TaskReaper, TaskSet};
 use gjio::SocketListener;
+use mongodb::ThreadedClient;
+use mongodb::db::ThreadedDatabase;
 use proddle::{Module, Operation};
 use proddle::proddle_capnp::proddle::{GetModulesParams, GetModulesResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
 use proddle::proddle_capnp::proddle::{Client, Server, ToClient};
+use rustc_serialize::json::Json;
 
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::{DefaultHasher, Entry};
@@ -290,7 +296,22 @@ impl Server for ServerImpl {
         //iterate over results
         for param_result in param_results.iter() {
             let json_string = param_result.get_json_string().unwrap();
-            println!("{}", json_string);
+
+            //parse json string into Bson::Document
+            let json = match Json::from_str(json_string) {
+                Ok(json) => json,
+                Err(e) => return Promise::err(capnp::Error::failed(format!("failed to parse json: {}", e))),
+            };
+
+            let document: bson::Document = match Bson::from_json(&json) {
+                Bson::Document(document) => document,
+                _ => return Promise::err(capnp::Error::failed(format!("failed to parse json as Bson::Document", e))),
+            };
+
+            //insert document
+            if let Err(e) = client.db("proddle").collection("results").insert_one(document, None) {
+                return Promise::err(capnp::Error::failed(format!("failed to insert result: {}", e))),
+            }
         }
 
         Promise::ok(())

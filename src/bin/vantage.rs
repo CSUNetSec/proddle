@@ -147,7 +147,7 @@ fn main() {
                                                     .arg(pool_operation_job.operation.domain)
                                                     .output() {
                                     Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
-                                    Err(e) => format!("{\"Error\":true,\"ErrorMessage\":\"{}\"}", e),
+                                    Err(e) => format!("{{\"Error\":true,\"ErrorMessage\":\"{}\"}}", e),
                                 };
 
                                 if let Err(e) = pool_tx.send(output) {
