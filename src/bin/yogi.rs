@@ -9,6 +9,7 @@ extern crate rustc_serialize;
 extern crate time;
 
 use bson::Bson;
+use clap::App;
 use mongodb::ThreadedClient;
 use mongodb::db::ThreadedDatabase;
 
@@ -16,44 +17,8 @@ use std::fs::File;
 use std::io::Read;
 
 fn main() {
-    let matches = clap_app!(yogi =>
-            (version: "1.0")
-            (author: "hamersaw <hamersaw@bushpath.com>")
-            (@subcommand module =>
-                (about: "Perform actions on modules")
-                (@subcommand add =>
-                    (about: "Add a module")
-                    (@arg FILE: +required "Filename of module")
-                    (@arg MODULE_NAME: +required "Name of module")
-                    (@arg DEPENDENCY: -d --dependency +takes_value ... "Python dependencies of the module")
-                )
-                (@subcommand delete =>
-                    (about: "Delete a module")
-                    (@arg MODULE_NAME: +required "Name of module")
-                )
-                (@subcommand search =>
-                    (about: "Search for a module")
-                    (@arg MODULE_NAME: +required "Name of module")
-                )
-            )
-            (@subcommand operation =>
-                (about: "Perform actions on operations")
-                (@subcommand add =>
-                    (about: "Add a operation")
-                    (@arg MODULE_NAME: +required "Name of module")
-                    (@arg DOMAIN: +required "Domain name")
-                    (@arg INTERVAL: -i --interval +takes_value "Operation execution interval in seconds")
-                )
-                (@subcommand delete =>
-                    (about: "delete an operation")
-                    (@arg DOMAIN: +required "Domain name")
-                )
-                (@subcommand search =>
-                    (about: "Search for an operation")
-                    (@arg DOMAIN: +required "Domain name")
-                )
-            )
-        ).get_matches();
+    let yaml = load_yaml!("yogi_args.yaml");
+    let matches = App::from_yaml(yaml).get_matches();
 
     //connect to mongodb
     let client = match proddle::get_mongodb_client("localhost", 27017) {

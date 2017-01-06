@@ -1,0 +1,62 @@
+name: yogi
+version: "1.0"
+author: Daniel Rammer <hamersaw@bushpath.com>
+subcommands:
+    - module:
+        about: Performs actions on modules.
+        subcommands:
+            - add:
+                about: Add a module.
+                args:
+                    - FILE:
+                        required: true
+                        help: Filename of module.
+                    - MODULE_NAME:
+                        required: true
+                        help: Name of module.
+                    - DEPENDENCY:
+                        short: d
+                        long: dependency
+                        multiple: true
+                        help: Python dependencies of the module.
+            - delete:
+                about: Delete a module.
+                args:
+                    - MODULE_NAME:
+                        required: true
+                        help: Name of module.
+            - search:
+                about: Search for a module
+                args:
+                    - MODULE_NAME:
+                        required: true
+                        help: Name of module.
+    - operation:
+        about: Performs actions on operations.
+        subcommands:
+            - add:
+                about: Add an operation.
+                args:
+                    - MODULE_NAME:
+                        required: true
+                        help: Name of module.
+                    - DOMAIN:
+                        required: true
+                        help: Domain name.
+                    - INTERVAL:
+                        short: i
+                        long: interval
+                        takes_value: true
+                        help: Operation execution interval in seconds.
+            - delete:
+                about: Delete an operation(s).
+                args:
+                    - DOMAIN:
+                        required: true
+                        help: Domain name.
+            - search:
+                about: Search for an operation(s)
+                args:
+                    - DOMAIN:
+                        required: true
+                        help: Domain name.
