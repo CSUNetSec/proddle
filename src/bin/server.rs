@@ -296,6 +296,7 @@ impl Server for ServerImpl {
         //iterate over results
         for param_result in param_results.iter() {
             let json_string = param_result.get_json_string().unwrap();
+            println!("INSERTING {}", json_string);
 
             //parse json string into Bson::Document
             let json = match Json::from_str(json_string) {
@@ -305,12 +306,12 @@ impl Server for ServerImpl {
 
             let document: bson::Document = match Bson::from_json(&json) {
                 Bson::Document(document) => document,
-                _ => return Promise::err(capnp::Error::failed(format!("failed to parse json as Bson::Document", e))),
+                _ => return Promise::err(capnp::Error::failed("failed to parse json as Bson::Document".to_owned())),
             };
 
             //insert document
             if let Err(e) = client.db("proddle").collection("results").insert_one(document, None) {
-                return Promise::err(capnp::Error::failed(format!("failed to insert result: {}", e))),
+                return Promise::err(capnp::Error::failed(format!("failed to insert result: {}", e)));
             }
         }
 

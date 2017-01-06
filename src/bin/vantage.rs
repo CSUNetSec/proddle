@@ -33,7 +33,7 @@ fn main() {
     let thread_count = 8;
     let server_address = "127.0.0.1:12289";
     let server_poll_interval_seconds = 1440;
-    let result_batch_size = 100;
+    let result_batch_size = 2;
 
     //initialize vantage data structures
     let modules: Arc<RwLock<HashMap<String, Module>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -142,15 +142,24 @@ fn main() {
 
                             let pool_tx = tx.clone();
                             thread_pool.execute(move || {
-                                let output = match Command::new("python")
-                                                    .arg(format!("{}/{}", modules_directory, pool_operation_job.operation.module))
-                                                    .arg(pool_operation_job.operation.domain)
-                                                    .output() {
-                                    Ok(output) => String::from_utf8_lossy(&output.stdout).into_owned(),
-                                    Err(e) => format!("{{\"Error\":true,\"ErrorMessage\":\"{}\"}}", e),
+                                let mut result = String::from_str("{").unwrap();
+                                result.push_str(&format!("\"Timestamp\":{}", time::now_utc().to_timespec().sec));
+                                result.push_str(&format!(",\"Module\":\"{}\"", pool_operation_job.operation.module));
+                                result.push_str(&format!(",\"Domain\":\"{}\"", pool_operation_job.operation.domain));
+
+                                match Command::new("python")
+                                            .arg(format!("{}/{}", modules_directory, pool_operation_job.operation.module))
+                                            .arg(pool_operation_job.operation.domain)
+                                            .output() {
+                                    Ok(output) => {
+                                        result.push_str(&format!(",\"Error\":false,\"Result\":{}", String::from_utf8_lossy(&output.stdout).into_owned()));
+                                    },
+                                    Err(e) => result.push_str(&format!(",\"Error\":true,\"ErrorMessage\":\"{}\"", e)),
                                 };
 
-                                if let Err(e) = pool_tx.send(output) {
+                                result.push_str("}");
+
+                                if let Err(e) = pool_tx.send(result) {
                                     panic!("failed to send result over result channel: {}", e);
                                 }
                             });
