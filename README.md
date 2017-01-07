@@ -4,7 +4,6 @@
 A distributed network measurement tool.
 
 ##TODO
-- parameterize variables in server and vantage
 - add hostname to results in vantage
 - validate module scripts before they're uploaded
 - use pip3 to install dependencies of modules

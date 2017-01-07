@@ -2,6 +2,8 @@ extern crate bson;
 extern crate capnp;
 extern crate capnp_rpc;
 #[macro_use]
+extern crate clap;
+#[macro_use]
 extern crate gj;
 extern crate gjio;
 extern crate mongodb;
@@ -13,6 +15,7 @@ use capnp::capability::Promise;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
+use clap::App;
 use gj::{EventLoop, TaskReaper, TaskSet};
 use gjio::SocketListener;
 use mongodb::ThreadedClient;
@@ -29,10 +32,21 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 
 fn main() {
+    let yaml = load_yaml!("server_args.yaml");
+    let matches = App::from_yaml(yaml).get_matches();
+
+    //initialize server parameters
+    let listen_socket_address = format!("{}:{}", matches.value_of("SERVER_IP_ADDRESS").unwrap(), matches.value_of("SERVER_PORT").unwrap());
+    let mongodb_ip_address = matches.value_of("MONGODB_IP_ADDRESS").unwrap();
+    let mongodb_port = match matches.value_of("MONGODB_PORT").unwrap().parse::<u16>() {
+        Ok(mongodb_port) => mongodb_port,
+        Err(e) => panic!("failed to parse mongodb_port as u16: {}", e),
+    };
+
     let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
         //open tcp listener
         let mut event_port = try!(gjio::EventPort::new());
-        let socket_addr = match SocketAddr::from_str(&format!("127.0.0.1:12289")) {
+        let socket_addr = match SocketAddr::from_str(&listen_socket_address) {
             Ok(socket_addr) => socket_addr,
             Err(e) => panic!("failed to parse socket address: {}", e),
         };
@@ -41,7 +55,7 @@ fn main() {
         let listener = try!(tcp_address.listen());
 
         //start server
-        let proddle = ToClient::new(ServerImpl::new("127.0.0.1", 27017)).from_server::<capnp_rpc::Server>();
+        let proddle = ToClient::new(ServerImpl::new(mongodb_ip_address, mongodb_port)).from_server::<capnp_rpc::Server>();
         let task_set = TaskSet::new(Box::new(Reaper));
 
         //accept connection
@@ -296,7 +310,6 @@ impl Server for ServerImpl {
         //iterate over results
         for param_result in param_results.iter() {
             let json_string = param_result.get_json_string().unwrap();
-            println!("INSERTING {}", json_string);
 
             //parse json string into Bson::Document
             let json = match Json::from_str(json_string) {

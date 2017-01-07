@@ -1,0 +1,29 @@
+name: server
+version: "1.0"
+author: Daniel Rammer <hamesaw@bushpath.com>
+about: Server deployment for the distributed probing application Proddle.
+args:
+    - MONGODB_IP_ADDRESS:
+        short: i
+        long: mongodb_ip_address
+        takes_value: true
+        default_value: 127.0.0.1
+        help: Ip address for mongodb instance.
+    - MONGODB_PORT:
+        short: p
+        long: mongodb_port
+        takes_value: true
+        default_value: "27017"
+        help: Port for mongodb instance.
+    - SERVER_IP_ADDRESS:
+        short: s
+        long: ip_address
+        takes_value: true
+        default_value: 0.0.0.0
+        help: Ip address for proddle server.
+    - SERVER_PORT:
+        short: o
+        long: port
+        takes_value: true
+        default_value: "12289"
+        help: Port for proddle server.
