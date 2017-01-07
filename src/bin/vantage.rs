@@ -1,5 +1,7 @@
 extern crate capnp;
 extern crate capnp_rpc;
+#[macro_use]
+extern crate clap;
 extern crate gj;
 extern crate gjio;
 extern crate proddle;
@@ -9,6 +11,7 @@ extern crate threadpool;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
+use clap::App;
 use gj::EventLoop;
 use proddle::{Module, Operation};
 use proddle::proddle_capnp::proddle::Client;
@@ -27,13 +30,31 @@ use std::sync::{Arc, RwLock};
 use std::sync::mpsc::channel;
 
 fn main() {
+    let yaml = load_yaml!("vantage_args.yaml");
+    let matches = App::from_yaml(yaml).get_matches();
+
     //initialize vantage parameters
-    let modules_directory = "/tmp";
-    let bucket_count = 10;
-    let thread_count = 8;
-    let server_address = "127.0.0.1:12289";
-    let server_poll_interval_seconds = 1440;
-    let result_batch_size = 2;
+    let modules_directory = matches.value_of("MODULES_DIRECTORY").unwrap().to_owned();
+    let bucket_count = match matches.value_of("BUCKET_COUNT").unwrap().parse::<u64>() {
+        Ok(bucket_count) => bucket_count,
+        Err(e) => panic!("failed to parse bucket_count as u64: {}", e),
+    };
+
+    let thread_count = match matches.value_of("THREAD_COUNT").unwrap().parse::<usize>() {
+        Ok(thread_count) => thread_count,
+        Err(e) => panic!("failed to parse thread_count as usize: {}", e),
+    };
+
+    let server_address = &format!("{}:{}", matches.value_of("SERVER_IP_ADDRESS").unwrap(), matches.value_of("SERVER_PORT").unwrap());
+    let server_poll_interval_seconds = match matches.value_of("SERVER_POLL_INTERVAL_SECONDS").unwrap().parse::<u64>() {
+        Ok(server_poll_interval_seconds) => server_poll_interval_seconds,
+        Err(e) => panic!("failed to parse server_poll_interval_seconds as u64: {}", e),
+    };
+
+    let result_batch_size = match matches.value_of("RESULT_BATCH_SIZE").unwrap().parse::<usize>() {
+        Ok(result_batch_size) => result_batch_size,
+        Err(e) => panic!("failed to parse result_batch_size as usize: {}", e),
+    };
 
     //initialize vantage data structures
     let modules: Arc<RwLock<HashMap<String, Module>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -58,6 +79,7 @@ fn main() {
     let (tx, rx) = channel();
 
     //start recv result channel
+    let thread_server_address = server_address.clone();
     std::thread::spawn(move || {
         let mut result_buffer: Vec<String> = Vec::new();
 
@@ -71,10 +93,11 @@ fn main() {
                 //send results to a server
                 {
                     let result_buffer_borrow = &result_buffer;
+                    let pool_server_address = &thread_server_address;
                     let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
                         //open stream
                         let mut event_port = try!(gjio::EventPort::new());
-                        let socket_addr = match SocketAddr::from_str(server_address) {
+                        let socket_addr = match SocketAddr::from_str(pool_server_address) {
                             Ok(socket_addr) => socket_addr,
                             Err(e) => panic!("failed to parse socket address: {}", e),
                         };
@@ -99,8 +122,9 @@ fn main() {
 
                         //send results request
                         let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
-                        let reader = try!(response.get());
-                        //let result_modules = try!(reader.get_modules());
+                        if let Err(e) = response.get() {
+                            panic!("failed to retrieve send results response from server: {}", e);
+                        }
 
                         Ok(())
                     });
@@ -118,6 +142,7 @@ fn main() {
 
     //start thread for scheduling operations
     let thread_operations = operations.clone();
+    let thread_modules_directory = modules_directory.to_owned();
     std::thread::spawn(move || {
         let thread_pool = ThreadPool::new(thread_count);
 
@@ -134,21 +159,25 @@ fn main() {
                             None => break,
                         };
 
+                        //if the next execution time is earlier then the current time then execute
                         if execution_time < now {
                             let mut operation_job = operation_jobs.pop().unwrap();
                             let pool_operation_job = operation_job.clone();
                             operation_job.execution_time += operation_job.operation.interval as i64;
                             operation_jobs.push(operation_job);
 
+                            //add job to thread pool
                             let pool_tx = tx.clone();
+                            let pool_modules_directory = thread_modules_directory.clone();
                             thread_pool.execute(move || {
+                                //execute operation and store results in json string
                                 let mut result = String::from_str("{").unwrap();
                                 result.push_str(&format!("\"Timestamp\":{}", time::now_utc().to_timespec().sec));
                                 result.push_str(&format!(",\"Module\":\"{}\"", pool_operation_job.operation.module));
                                 result.push_str(&format!(",\"Domain\":\"{}\"", pool_operation_job.operation.domain));
 
                                 match Command::new("python")
-                                            .arg(format!("{}/{}", modules_directory, pool_operation_job.operation.module))
+                                            .arg(format!("{}/{}", pool_modules_directory, pool_operation_job.operation.module))
                                             .arg(pool_operation_job.operation.domain)
                                             .output() {
                                     Ok(output) => {
@@ -159,6 +188,7 @@ fn main() {
 
                                 result.push_str("}");
 
+                                //send result string over result channel
                                 if let Err(e) = pool_tx.send(result) {
                                     panic!("failed to send result over result channel: {}", e);
                                 }
@@ -179,6 +209,7 @@ fn main() {
         let modules = modules.clone();
         let operations = operations.clone();
         let operation_bucket_hashes = operation_bucket_hashes.clone();
+        let loop_modules_directory = modules_directory.to_owned();
 
         let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
             //open stream
@@ -231,7 +262,7 @@ fn main() {
 
                     if module.version == 0 {
                         //delete file
-                        if let Err(e) =  std::fs::remove_file(format!("{}/{}", modules_directory, module.name)) {
+                        if let Err(e) =  std::fs::remove_file(format!("{}/{}", loop_modules_directory, module.name)) {
                             panic!("failed to delete module file '{}': {}", module.name, e);
                         }
 
@@ -239,7 +270,7 @@ fn main() {
                         modules.remove(&module.name);
                     } else {
                         //create file
-                        let mut file = match File::create(format!("{}/{}", modules_directory, module.name)) {
+                        let mut file = match File::create(format!("{}/{}", loop_modules_directory, module.name)) {
                             Ok(file) => file,
                             Err(e) => panic!("failed to create modules file '{}': {}", module.name, e),
                         };
