@@ -3,12 +3,24 @@ version: "1.0"
 author: Daniel Rammer <hamesaw@bushpath.com>
 about: Vantage deployment for the distributed probing application Proddle.
 args:
+    - HOSTNAME:
+        short: h
+        long: hostname
+        takes_value: true
+        required: true
+        help: Hostname of vantage.
+    - IP_ADDRESS:
+        short: a
+        long: ip_address
+        takes_value: true
+        required: true
+        help: Ip address of vantage.
     - MODULES_DIRECTORY:
         short: d
         long: modules_directory
         takes_value: true
         default_value: /tmp
-        help: Directory to store module python scripts
+        help: Directory to store module python scripts.
     - BUCKET_COUNT:
         short: b
         long: bucket_count
@@ -23,13 +35,13 @@ args:
         help: Number of threads for operation execution.
     - SERVER_IP_ADDRESS:
         short: i
-        long: ip_address
+        long: server_ip_address
         takes_value: true
         default_value: 127.0.0.1
         help: Ip address for proddle server.
     - SERVER_PORT:
         short: p
-        long: port
+        long: server_port
         takes_value: true
         default_value: "12289"
         help: Port for proddle server.

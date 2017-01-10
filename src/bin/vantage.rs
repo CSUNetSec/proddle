@@ -34,6 +34,8 @@ fn main() {
     let matches = App::from_yaml(yaml).get_matches();
 
     //initialize vantage parameters
+    let hostname = matches.value_of("HOSTNAME").unwrap().to_owned();
+    let ip_address = matches.value_of("IP_ADDRESS").unwrap().to_owned();
     let modules_directory = matches.value_of("MODULES_DIRECTORY").unwrap().to_owned();
     let bucket_count = match matches.value_of("BUCKET_COUNT").unwrap().parse::<u64>() {
         Ok(bucket_count) => bucket_count,
@@ -168,11 +170,15 @@ fn main() {
 
                             //add job to thread pool
                             let pool_tx = tx.clone();
+                            let pool_hostname = hostname.clone();
+                            let pool_ip_address = ip_address.clone();
                             let pool_modules_directory = thread_modules_directory.clone();
                             thread_pool.execute(move || {
                                 //execute operation and store results in json string
                                 let mut result = String::from_str("{").unwrap();
                                 result.push_str(&format!("\"Timestamp\":{}", time::now_utc().to_timespec().sec));
+                                result.push_str(&format!(",\"Hostname\":\"{}\"", pool_hostname));
+                                result.push_str(&format!(",\"IpAddress\":\"{}\"", pool_ip_address));
                                 result.push_str(&format!(",\"Module\":\"{}\"", pool_operation_job.operation.module));
                                 result.push_str(&format!(",\"Domain\":\"{}\"", pool_operation_job.operation.domain));
 

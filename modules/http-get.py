@@ -24,7 +24,7 @@ try:
     #print information
     print('{', end='')
     print('"Error":false,', end='')
-    print('"HTTPStatusCode":%d,' % c.getinfo(c.RESPONSE_CODE), end='')
+    print('"HttpStatusCode":%d,' % c.getinfo(c.RESPONSE_CODE), end='')
     print('"ApplicationLayerLatency":%f,' % c.getinfo(c.TOTAL_TIME), end='')
     print('"PrimaryIP":"%s",' % c.getinfo(c.PRIMARY_IP), end='')
     print('"RedirectCount":%d' % c.getinfo(c.REDIRECT_COUNT), end='')
