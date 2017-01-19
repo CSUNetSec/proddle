@@ -12,6 +12,7 @@ c = pycurl.Curl()
 c.setopt(c.URL, sys.argv[1])
 c.setopt(c.WRITEDATA, buffer)
 c.setopt(c.FOLLOWLOCATION, True)
+c.setopt(c.TIMEOUT, 120)
 
 #execute request
 try:

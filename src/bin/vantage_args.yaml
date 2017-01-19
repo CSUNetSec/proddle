@@ -1,16 +1,16 @@
 name: vantage
 version: "1.0"
-author: Daniel Rammer <hamesaw@bushpath.com>
+author: Daniel Rammer <hamersaw@bushpath.com>
 about: Vantage deployment for the distributed probing application Proddle.
 args:
     - HOSTNAME:
-        short: h
+        short: H
         long: hostname
         takes_value: true
         required: true
         help: Hostname of vantage.
     - IP_ADDRESS:
-        short: a
+        short: I
         long: ip_address
         takes_value: true
         required: true
@@ -46,7 +46,7 @@ args:
         default_value: "12289"
         help: Port for proddle server.
     - SERVER_POLL_INTERVAL_SECONDS:
-        short: s
+        short: P
         long: poll_interval_seconds
         takes_value: true
         default_value: "1440"
