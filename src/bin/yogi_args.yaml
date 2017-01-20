@@ -2,44 +2,44 @@ name: yogi
 version: "1.0"
 author: Daniel Rammer <hamersaw@bushpath.com>
 subcommands:
-    - module:
-        about: Performs actions on modules.
+    - measurement:
+        about: Performs actions on measurements.
         subcommands:
             - add:
-                about: Add a module.
+                about: Add a measurement.
                 args:
                     - FILE:
                         required: true
-                        help: Filename of module.
-                    - MODULE_NAME:
+                        help: Filename of measurement.
+                    - MEASUREMENT_NAME:
                         required: true
-                        help: Name of module.
+                        help: Name of measurement.
                     - DEPENDENCY:
                         short: d
                         long: dependency
                         multiple: true
-                        help: Python dependencies of the module.
+                        help: Python dependencies of the measurement.
             - delete:
                 about: Delete a module.
                 args:
-                    - MODULE_NAME:
+                    - MEASUREMENT_NAME:
                         required: true
-                        help: Name of module.
+                        help: Name of measurement.
             - search:
                 about: Search for a module
                 args:
-                    - MODULE_NAME:
+                    - MEASUREMENT_NAME:
                         required: true
-                        help: Name of module.
+                        help: Name of measurement.
     - operation:
         about: Performs actions on operations.
         subcommands:
             - add:
                 about: Add an operation.
                 args:
-                    - MODULE_NAME:
+                    - MEASUREMENT_NAME:
                         required: true
-                        help: Name of module.
+                        help: Name of measurement.
                     - DOMAIN:
                         required: true
                         help: Domain name.

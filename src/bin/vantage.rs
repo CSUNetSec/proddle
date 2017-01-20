@@ -13,7 +13,7 @@ use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::App;
 use gj::EventLoop;
-use proddle::{Module, Operation};
+use proddle::{Measurement, Operation};
 use proddle::proddle_capnp::proddle::Client;
 use threadpool::ThreadPool;
 
@@ -36,7 +36,7 @@ fn main() {
     //initialize vantage parameters
     let hostname = matches.value_of("HOSTNAME").unwrap().to_owned();
     let ip_address = matches.value_of("IP_ADDRESS").unwrap().to_owned();
-    let modules_directory = matches.value_of("MODULES_DIRECTORY").unwrap().to_owned();
+    let measurements_directory = matches.value_of("MEASUREMENTS_DIRECTORY").unwrap().to_owned();
     let bucket_count = match matches.value_of("BUCKET_COUNT").unwrap().parse::<u64>() {
         Ok(bucket_count) => bucket_count,
         Err(e) => panic!("failed to parse bucket_count as u64: {}", e),
@@ -59,7 +59,7 @@ fn main() {
     };
 
     //initialize vantage data structures
-    let modules: Arc<RwLock<HashMap<String, Module>>> = Arc::new(RwLock::new(HashMap::new()));
+    let measurements: Arc<RwLock<HashMap<String, Measurement>>> = Arc::new(RwLock::new(HashMap::new()));
     let operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>> = Arc::new(RwLock::new(HashMap::new()));
     let operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>> = Arc::new(RwLock::new(HashMap::new()));
 
@@ -161,7 +161,7 @@ fn main() {
 
     //start thread for scheduling operations
     let thread_operations = operations.clone();
-    let thread_modules_directory = modules_directory.to_owned();
+    let thread_measurements_directory = measurements_directory.to_owned();
     std::thread::spawn(move || {
         let thread_pool = ThreadPool::new(thread_count);
 
@@ -189,18 +189,18 @@ fn main() {
                             let pool_tx = tx.clone();
                             let pool_hostname = hostname.clone();
                             let pool_ip_address = ip_address.clone();
-                            let pool_modules_directory = thread_modules_directory.clone();
+                            let pool_measurements_directory = thread_measurements_directory.clone();
                             thread_pool.execute(move || {
                                 //execute operation and store results in json string
                                 let mut result = String::from_str("{").unwrap();
                                 result.push_str(&format!("\"Timestamp\":{}", time::now_utc().to_timespec().sec));
                                 result.push_str(&format!(",\"Hostname\":\"{}\"", pool_hostname));
                                 result.push_str(&format!(",\"IpAddress\":\"{}\"", pool_ip_address));
-                                result.push_str(&format!(",\"Module\":\"{}\"", pool_operation_job.operation.module));
+                                result.push_str(&format!(",\"Measurement\":\"{}\"", pool_operation_job.operation.measurement));
                                 result.push_str(&format!(",\"Domain\":\"{}\"", pool_operation_job.operation.domain));
 
                                 match Command::new("python")
-                                            .arg(format!("{}/{}", pool_modules_directory, pool_operation_job.operation.module))
+                                            .arg(format!("{}/{}", pool_measurements_directory, pool_operation_job.operation.measurement))
                                             .arg(pool_operation_job.operation.domain)
                                             .output() {
                                     Ok(output) => {
@@ -227,12 +227,12 @@ fn main() {
         }
     });
 
-    //start loop to periodically request modules and operations
+    //start loop to periodically request measurements and operations
     loop {
-        let modules = modules.clone();
+        let measurements = measurements.clone();
         let operations = operations.clone();
         let operation_bucket_hashes = operation_bucket_hashes.clone();
-        let loop_modules_directory = modules_directory.to_owned();
+        let loop_measurements_directory = measurements_directory.to_owned();
 
         let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
             //open stream
@@ -250,65 +250,65 @@ fn main() {
             let mut rpc_system = RpcSystem::new(network, None);
             let proddle: Client = rpc_system.bootstrap(Side::Server);
 
-            //populate get modules request
-            let mut request = proddle.get_modules_request();
+            //populate get measurements request
+            let mut request = proddle.get_measurements_request();
             {
-                let modules = modules.read().unwrap();
-                let mut request_modules = request.get().init_modules(modules.len() as u32);
-                for (i, module) in modules.values().enumerate() {
-                    let mut request_module = request_modules.borrow().get(i as u32);
+                let measurements = measurements.read().unwrap();
+                let mut request_measurements = request.get().init_measurements(measurements.len() as u32);
+                for (i, measurement) in measurements.values().enumerate() {
+                    let mut request_measurement = request_measurements.borrow().get(i as u32);
 
-                    if let Some(timestamp) = module.timestamp {
-                        request_module.set_timestamp(timestamp);
+                    if let Some(timestamp) = measurement.timestamp {
+                        request_measurement.set_timestamp(timestamp);
                     }
 
-                    request_module.set_name(&module.name);
-                    request_module.set_version(module.version);
+                    request_measurement.set_name(&measurement.name);
+                    request_measurement.set_version(measurement.version);
                 }
             }
 
-            //send modules request
+            //send measurements request
             let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
             let reader = try!(response.get());
-            let result_modules = try!(reader.get_modules());
+            let result_measurements = try!(reader.get_measurements());
 
-            //process result modules
+            //process result measurements
             {
-                let mut modules = modules.write().unwrap();
-                for result_module in result_modules.iter() {
-                    let module = match Module::from_capnproto(&result_module) {
-                        Ok(module) => module,
-                        Err(e) => panic!("failed to parse capnproto to module: {}", e),
+                let mut measurements = measurements.write().unwrap();
+                for result_measurement in result_measurements.iter() {
+                    let measurement = match Measurement::from_capnproto(&result_measurement) {
+                        Ok(measurement) => measurement,
+                        Err(e) => panic!("failed to parse capnproto to measurement: {}", e),
                     };
 
-                    //println!("PROCESSING MODULE {} - {}",  module.name, module.version);
+                    //println!("PROCESSING MODULE {} - {}",  measurement.name, measurement.version);
 
-                    if module.version == 0 {
+                    if measurement.version == 0 {
                         //delete file
-                        if let Err(e) =  std::fs::remove_file(format!("{}/{}", loop_modules_directory, module.name)) {
-                            panic!("failed to delete module file '{}': {}", module.name, e);
+                        if let Err(e) =  std::fs::remove_file(format!("{}/{}", loop_measurements_directory, measurement.name)) {
+                            panic!("failed to delete measurement file '{}': {}", measurement.name, e);
                         }
 
-                        //remove from modules data structures
-                        modules.remove(&module.name);
+                        //remove from measurements data structures
+                        measurements.remove(&measurement.name);
                     } else {
                         //create file
-                        let mut file = match File::create(format!("{}/{}", loop_modules_directory, module.name)) {
+                        let mut file = match File::create(format!("{}/{}", loop_measurements_directory, measurement.name)) {
                             Ok(file) => file,
-                            Err(e) => panic!("failed to create modules file '{}': {}", module.name, e),
+                            Err(e) => panic!("failed to create measurements file '{}': {}", measurement.name, e),
                         };
 
-                        let content = module.content.clone().unwrap().into_bytes();
+                        let content = measurement.content.clone().unwrap().into_bytes();
                         if let Err(e) = file.write_all(&content) {
-                            panic!("failed to write content to module file '{}': {}", module.name, e);
+                            panic!("failed to write content to measurement file '{}': {}", measurement.name, e);
                         }
 
                         if let Err(e) = file.flush() {
-                            panic!("failed to flush file content to module file '{}': {}", module.name, e);
+                            panic!("failed to flush file content to measurement file '{}': {}", measurement.name, e);
                         }
 
-                        //add to modules data structure
-                        modules.insert(module.name.to_owned(), module);
+                        //add to measurements data structure
+                        measurements.insert(measurement.name.to_owned(), measurement);
                     }
                 }
             }
@@ -339,7 +339,7 @@ fn main() {
                     let mut binary_heap = BinaryHeap::new();
                     let mut hasher = DefaultHasher::new();
                     for result_operation in try!(result_operation_bucket.get_operations()).iter() {
-                        //println!("PROCESSING OPERATION {} - {}", result_operation.get_domain().unwrap(), result_operation.get_module().unwrap());
+                        //println!("PROCESSING OPERATION {} - {}", result_operation.get_domain().unwrap(), result_operation.get_measurement().unwrap());
 
                         //add operation to binary heap
                         match Operation::from_capnproto(&result_operation) {
@@ -361,7 +361,7 @@ fn main() {
         });
 
         if let Err(e) = result {
-            panic!("get modules/operations event loop failed: {}", e);
+            panic!("get measurements/operations event loop failed: {}", e);
         }
 
         std::thread::sleep(std::time::Duration::new(server_poll_interval_seconds, 0))

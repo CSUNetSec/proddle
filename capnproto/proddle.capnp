@@ -1,7 +1,7 @@
 @0xa74d94a500622841;
 
 interface Proddle {
-    getModules @0 (modules :List(Module)) -> (modules :List(Module));
+    getMeasurements @0 (measurements :List(Measurement)) -> (measurements :List(Measurement));
     getOperations @1 (bucketHashes :List(BucketHash)) -> (operationBuckets :List(OperationBucket));
     sendResults @2 (results: List(Result)) -> ();
 }
@@ -11,8 +11,8 @@ struct BucketHash {
     hash @1 :UInt64;
 }
 
-# Module Definition
-struct Module {
+# Measurement Definition
+struct Measurement {
     timestamp @0 :UInt64;
     name @1 :Text;
     version @2 :UInt16;
@@ -24,7 +24,7 @@ struct Module {
 struct Operation {
     timestamp @0 :UInt64;
     domain @1 :Text;
-    module @2 :Text;
+    measurement @2 :Text;
     interval @3 :UInt32;
 }
 

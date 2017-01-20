@@ -20,8 +20,8 @@ use gj::{EventLoop, TaskReaper, TaskSet};
 use gjio::SocketListener;
 use mongodb::ThreadedClient;
 use mongodb::db::ThreadedDatabase;
-use proddle::{Module, Operation};
-use proddle::proddle_capnp::proddle::{GetModulesParams, GetModulesResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
+use proddle::{Measurement, Operation};
+use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
 use proddle::proddle_capnp::proddle::{Client, Server, ToClient};
 use rustc_serialize::json::Json;
 
@@ -105,9 +105,9 @@ impl ServerImpl {
 }
 
 impl Server for ServerImpl {
-    fn get_modules(&mut self, params: GetModulesParams<>, mut results: GetModulesResults<>) -> Promise<(), capnp::Error> {
+    fn get_measurements(&mut self, params: GetMeasurementsParams<>, mut results: GetMeasurementsResults<>) -> Promise<(), capnp::Error> {
         let params = pry!(params.get());
-        let param_modules = pry!(params.get_modules());
+        let param_measurements = pry!(params.get_measurements());
         
         //connect to mongodb
         let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
@@ -115,9 +115,9 @@ impl Server for ServerImpl {
             Err(e) => return Promise::err(capnp::Error::failed(format!("failed to connect to mongodb: {}", e))),
         };
 
-        //iterate over modules in mongodb and store in modules map
-        let mut modules = HashMap::new();
-        match proddle::find_modules(client.clone(), None, None, None, false) {
+        //iterate over measurements in mongodb and store in measurements map
+        let mut measurements = HashMap::new();
+        match proddle::find_measurements(client.clone(), None, None, None, false) {
             Ok(cursor) => {
                 for document in cursor {
                     let document = match document {
@@ -128,75 +128,75 @@ impl Server for ServerImpl {
                         }
                     };
 
-                    //parse mongodb document into module
-                    let module = match Module::from_mongodb(&document) {
-                        Ok(module) => module,
-                        Err(e) => panic!("failed to parse mongodb document into module: {}", e),
+                    //parse mongodb document into measurement
+                    let measurement = match Measurement::from_mongodb(&document) {
+                        Ok(measurement) => measurement,
+                        Err(e) => panic!("failed to parse mongodb document into measurement: {}", e),
                     };
 
-                    //check if module name already exists and/or version comparrison
-                    let entry = modules.entry(module.name.to_owned());
+                    //check if measurement name already exists and/or version comparrison
+                    let entry = measurements.entry(measurement.name.to_owned());
                     if let Entry::Occupied(mut occupied_entry) = entry {
                         let replace;
                         {
-                            let entry: &Module = occupied_entry.get();
-                            replace = module.version > entry.version;
+                            let entry: &Measurement = occupied_entry.get();
+                            replace = measurement.version > entry.version;
                         }
                         
                         //if version is newer then replace
                         if replace {
-                            occupied_entry.insert(module);
+                            occupied_entry.insert(measurement);
                         }
                     } else if let Entry::Vacant(vacant_entry) = entry {
                         //if entry does not exist then insert
-                        vacant_entry.insert(module);
+                        vacant_entry.insert(measurement);
                     }
                 }
             },
-            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve modules: {}", e))),
+            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve measurements: {}", e))),
         }
 
-        //compare vantage module versions to mongodb versions
-        for module in param_modules.iter() {
-            let module_name = match module.get_name() {
+        //compare vantage measurement versions to mongodb versions
+        for measurement in param_measurements.iter() {
+            let measurement_name = match measurement.get_name() {
                 Ok(name) => name,
-                Err(e) => panic!("failed to retrieve name from module: {}", e),
+                Err(e) => panic!("failed to retrieve name from measurement: {}", e),
             };
 
-            let entry = modules.entry(module_name.to_owned());
+            let entry = measurements.entry(measurement_name.to_owned());
             if let Entry::Occupied(occupied_entry) = entry {
                 //if vantage version is up to date remove from mongodb map
-                if module.get_version() >= occupied_entry.get().version {
+                if measurement.get_version() >= occupied_entry.get().version {
                     occupied_entry.remove();
                 }
             } else if let Entry::Vacant(vacant_entry) = entry {
                 //if mongodb map doens't contain remove from vantage
-                vacant_entry.insert(Module::new(None, module_name.to_owned(), 0, None, None));
+                vacant_entry.insert(Measurement::new(None, measurement_name.to_owned(), 0, None, None));
             }
         }
 
         //create results message
-        let mut results_modules = results.get().init_modules(modules.len() as u32);
-        for (i, entry) in modules.values().enumerate() {
-            //populate module
-            let mut module = results_modules.borrow().get(i as u32);
+        let mut results_measurements = results.get().init_measurements(measurements.len() as u32);
+        for (i, entry) in measurements.values().enumerate() {
+            //populate measurement
+            let mut measurement = results_measurements.borrow().get(i as u32);
 
             if let Some(timestamp) = entry.timestamp {
-                module.set_timestamp(timestamp);
+                measurement.set_timestamp(timestamp);
             }
 
-            module.set_name(&entry.name);
-            module.set_version(entry.version);
+            measurement.set_name(&entry.name);
+            measurement.set_version(entry.version);
 
             if let Some(ref dependencies) = entry.dependencies {
-                let mut module_dependencies = module.borrow().init_dependencies(dependencies.len() as u32);
+                let mut measurement_dependencies = measurement.borrow().init_dependencies(dependencies.len() as u32);
                 for (i, dependency) in dependencies.iter().enumerate() {
-                    module_dependencies.set(i as u32, dependency);
+                    measurement_dependencies.set(i as u32, dependency);
                 }
             }
 
             if let Some(ref content) = entry.content {
-                module.set_content(&content);
+                measurement.set_content(&content);
             }
         }
 
@@ -233,7 +233,7 @@ impl Server for ServerImpl {
                         }
                     };
 
-                    //parse mongodb document into module
+                    //parse mongodb document into measurement
                     let operation = match Operation::from_mongodb(&document) {
                         Ok(operation) => operation,
                         Err(e) => panic!("failed to parse mongodb document into operation: {}", e),
@@ -289,7 +289,7 @@ impl Server for ServerImpl {
                 }
 
                 result_operation.set_domain(&operation.domain);
-                result_operation.set_module(&operation.module);
+                result_operation.set_measurement(&operation.measurement);
                 result_operation.set_interval(operation.interval);
             }
         }

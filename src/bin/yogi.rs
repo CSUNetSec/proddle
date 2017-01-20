@@ -26,16 +26,16 @@ fn main() {
         Err(e) => panic!("{}", e),
     };
 
-    if let Some(matches) = matches.subcommand_matches("module") {
+    if let Some(matches) = matches.subcommand_matches("measurement") {
         if let Some(matches) = matches.subcommand_matches("add") {
             let file = matches.value_of("FILE").unwrap();
-            let module_name = matches.value_of("MODULE_NAME").unwrap();
+            let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
             let dependencies: Vec<Bson> = match matches.values_of("DEPENDENCY") {
                 Some(dependencies) => dependencies.map(|x| Bson::String(x.to_owned())).collect(),
                 None => Vec::new(),
             };
 
-            let version = match proddle::find_module(client.clone(), module_name, None, true) {
+            let version = match proddle::find_measurement(client.clone(), measurement_name, None, true) {
                 Ok(Some(document)) => {
                     match document.get("version") {
                         Some(&Bson::I32(document_version)) => document_version + 1,
@@ -56,26 +56,26 @@ fn main() {
                 panic!("failed to read local file: {}", e);
             }
 
-            //create module document
+            //create measurement document
             let timestamp = time::now_utc().to_timespec().sec;
             let document = doc! { 
                 "timestamp" => timestamp,
-                "name" => module_name,
+                "name" => measurement_name,
                 "version" => version,
                 "dependencies" => dependencies,
                 "content" => buffer
             };
 
             //insert document
-            if let Err(e) = client.db("proddle").collection("modules").insert_one(document, None) {
-                panic!("failed to upload module document: {}", e);
+            if let Err(e) = client.db("proddle").collection("measurements").insert_one(document, None) {
+                panic!("failed to upload measurement document: {}", e);
             }
         } else if let Some(matches) = matches.subcommand_matches("delete") {
             unimplemented!();
         } else if let Some(matches) = matches.subcommand_matches("search") {
-            let module_name = matches.value_of("MODULE_NAME").unwrap();
+            let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
 
-            match proddle::find_modules(client.clone(), Some(module_name), None, Some(1), true) {
+            match proddle::find_measurements(client.clone(), Some(measurement_name), None, Some(1), true) {
                 Ok(cursor) => {
                     for document in cursor {
                         let document = match document {
@@ -91,7 +91,7 @@ fn main() {
         }
     } else if let Some(matches) = matches.subcommand_matches("operation") {
         if let Some(matches) = matches.subcommand_matches("add") {
-            let module_name = matches.value_of("MODULE_NAME").unwrap();
+            let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
             let domain = matches.value_of("DOMAIN").unwrap();
             let interval = match matches.value_of("INTERVAL") {
                 Some(interval) => {
@@ -103,17 +103,17 @@ fn main() {
                 None => 14400,
             };
 
-            //check if module exists
-            match proddle::find_module(client.clone(), module_name, None, true) {
+            //check if measurement exists
+            match proddle::find_measurement(client.clone(), measurement_name, None, true) {
                 Ok(Some(_)) => {},
-                _ => panic!("module does not exist"),
+                _ => panic!("measurement does not exist"),
             }
 
             //create opeation document
             let timestamp = time::now_utc().to_timespec().sec;
             let document = doc! {
                 "timestamp" => timestamp,
-                "module" => module_name,
+                "measurement" => measurement_name,
                 "domain" => domain,
                 "interval" => interval
             };
