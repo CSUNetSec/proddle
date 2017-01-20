@@ -84,6 +84,7 @@ fn main() {
     let thread_server_address = server_address.clone();
     std::thread::spawn(move || {
         let mut result_buffer: Vec<String> = Vec::new();
+        let mut failure_retry_time = 0;
 
         loop {
             match rx.recv() {
@@ -91,21 +92,30 @@ fn main() {
                 Err(e) => panic!("failed to retrieve result from result channel: {}", e),
             };
 
-            if result_buffer.len() == result_batch_size {
+            if result_buffer.len() >= result_batch_size && time::now_utc().to_timespec().sec > failure_retry_time {
                 //send results to a server
+                let result;
                 {
                     let result_buffer_borrow = &result_buffer;
                     let pool_server_address = &thread_server_address;
-                    let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
+                    result = EventLoop::top_level(move |wait_scope| -> Result<(), String> {
                         //open stream
-                        let mut event_port = try!(gjio::EventPort::new());
+                        let mut event_port = match gjio::EventPort::new() {
+                            Ok(event_port) => event_port,
+                            Err(e) => return Err(format!("{}", e)),
+                        };
+
                         let socket_addr = match SocketAddr::from_str(pool_server_address) {
                             Ok(socket_addr) => socket_addr,
-                            Err(e) => panic!("failed to parse socket address: {}", e),
+                            //Err(e) => panic!("failed to parse socket address: {}", e),
+                            Err(e) => return Err(format!("failed to parse socket address: {}", e)),
                         };
 
                         let tcp_address = event_port.get_network().get_tcp_address(socket_addr);
-                        let stream = try!(tcp_address.connect().wait(wait_scope, &mut event_port));
+                        let stream = match tcp_address.connect().wait(wait_scope, &mut event_port) {
+                            Ok(stream) => stream,
+                            Err(e) => return Err(format!("{}", e)),
+                        };
 
                         //connect rpc client
                         let network = Box::new(VatNetwork::new(stream.clone(), stream, Side::Client, Default::default()));
@@ -123,21 +133,28 @@ fn main() {
                         }
 
                         //send results request
-                        let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
+                        let response = match request.send().promise.wait(wait_scope, &mut event_port) {
+                            Ok(response) => response,
+                            Err(e) => return Err(format!("{}", e)),
+                        };
+
                         if let Err(e) = response.get() {
-                            panic!("failed to retrieve send results response from server: {}", e);
+                            return Err(format!("failed to retrieve send results response from server: {}", e));
                         }
 
                         Ok(())
                     });
-
-                    if let Err(e) = result {
-                        panic!("send results event loop failed: {}", e);
-                    }
                 }
 
-                //clear result buffer
-                result_buffer.clear();
+                if let Err(e) = result {
+                    println!("failed in the send results event loop: {}", e);
+
+                    //don't retry for another 10 minutes
+                    failure_retry_time = time::now_utc().to_timespec().sec + (60 * 10);
+                } else {
+                    //clear result buffer
+                    result_buffer.clear();
+                }
             }
         }
     });
