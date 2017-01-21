@@ -326,7 +326,7 @@ fn main() {
         });
 
         if let Err(e) = result {
-            panic!("get measurements/operations event loop failed: {}", e);
+            println!("get measurements/operations event loop failed: {}", e);
         }
 
         std::thread::sleep(std::time::Duration::new(server_poll_interval_seconds, 0))
