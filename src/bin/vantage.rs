@@ -14,6 +14,7 @@ use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::App;
 use gj::EventLoop;
 use proddle::{Measurement, Operation};
+use proddle::error::Error;
 use proddle::proddle_capnp::proddle::Client;
 use threadpool::ThreadPool;
 
@@ -98,24 +99,13 @@ fn main() {
                 {
                     let result_buffer_borrow = &result_buffer;
                     let pool_server_address = &thread_server_address;
-                    result = EventLoop::top_level(move |wait_scope| -> Result<(), String> {
+                    result = EventLoop::top_level(move |wait_scope| -> Result<(), Error> {
                         //open stream
-                        let mut event_port = match gjio::EventPort::new() {
-                            Ok(event_port) => event_port,
-                            Err(e) => return Err(format!("{}", e)),
-                        };
-
-                        let socket_addr = match SocketAddr::from_str(pool_server_address) {
-                            Ok(socket_addr) => socket_addr,
-                            //Err(e) => panic!("failed to parse socket address: {}", e),
-                            Err(e) => return Err(format!("failed to parse socket address: {}", e)),
-                        };
+                        let mut event_port = try!(gjio::EventPort::new());
+                        let socket_addr = try!(SocketAddr::from_str(pool_server_address));
 
                         let tcp_address = event_port.get_network().get_tcp_address(socket_addr);
-                        let stream = match tcp_address.connect().wait(wait_scope, &mut event_port) {
-                            Ok(stream) => stream,
-                            Err(e) => return Err(format!("{}", e)),
-                        };
+                        let stream = try!(tcp_address.connect().wait(wait_scope, &mut event_port));
 
                         //connect rpc client
                         let network = Box::new(VatNetwork::new(stream.clone(), stream, Side::Client, Default::default()));
@@ -133,14 +123,8 @@ fn main() {
                         }
 
                         //send results request
-                        let response = match request.send().promise.wait(wait_scope, &mut event_port) {
-                            Ok(response) => response,
-                            Err(e) => return Err(format!("{}", e)),
-                        };
-
-                        if let Err(e) = response.get() {
-                            return Err(format!("failed to retrieve send results response from server: {}", e));
-                        }
+                        let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
+                        try!(response.get());
 
                         Ok(())
                     });

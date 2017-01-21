@@ -3,6 +3,7 @@ extern crate bson;
 extern crate capnp;
 extern crate mongodb;
 
+pub mod error;
 pub mod proddle_capnp {
     include!(concat!(env!("OUT_DIR"), "/proddle_capnp.rs"));
 }
