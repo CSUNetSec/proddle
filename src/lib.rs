@@ -3,14 +3,18 @@ extern crate bson;
 extern crate capnp;
 extern crate mongodb;
 
-pub mod error;
+mod error;
+mod measurement;
+mod operation;
+
 pub mod proddle_capnp {
     include!(concat!(env!("OUT_DIR"), "/proddle_capnp.rs"));
 }
 
-use error::Error;
+pub use self::error::Error;
+pub use self::measurement::Measurement;
+pub use self::operation::Operation;
 
-use bson::Bson;
 use bson::ordered::OrderedDocument;
 use mongodb::{Client, ClientInner, ThreadedClient};
 use mongodb::coll::options::{CursorType, FindOptions};
@@ -42,169 +46,6 @@ pub fn get_bucket_key(map: &BTreeMap<u64, DefaultHasher>, key: u64) -> Option<u6
     }
 
     Some(bucket_key)
-}
-
-/*
- * Measurement
- */
-pub struct Measurement {
-    pub timestamp: Option<u64>,
-    pub name: String,
-    pub version: u16,
-    pub dependencies: Option<Vec<String>>,
-    pub content: Option<String>,
-}
-
-impl Measurement {
-    pub fn new(timestamp: Option<u64>, name: String, version: u16, dependencies: Option<Vec<String>>, content: Option<String>) -> Measurement {
-        Measurement {
-            timestamp: timestamp,
-            name: name,
-            version: version,
-            dependencies: dependencies,
-            content: content,
-        }
-    }
-
-    pub fn from_mongodb(document: &OrderedDocument) -> Result<Measurement, Error> {
-        let timestamp = match document.get("timestamp") {
-            Some(&Bson::I64(timestamp)) => Some(timestamp as u64),
-            _ => return Err(Error::Proddle("failed to parse timestamp as i64".to_owned())),
-        };
-
-        let measurement_name = match document.get("name") {
-            Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err(Error::Proddle("failed to parse name as string".to_owned())),
-        };
-
-        let version = match document.get("version") {
-            Some(&Bson::I32(version)) => version as u16,
-            _ => return Err(Error::Proddle("failed to parse version as i32".to_owned())),
-        };
-
-        let dependencies: Option<Vec<String>> = match document.get("dependencies") {
-            Some(&Bson::Array(ref dependencies)) => Some(dependencies.iter().map(|x| x.to_string()).collect()),
-            _ => return Err(Error::Proddle("failed to parse dependencies as array".to_owned())),
-        };
-        
-        let content = match document.get("content") {
-            Some(&Bson::String(ref content)) => Some(content.to_owned()),
-            _ => return Err(Error::Proddle("failed to parse content as string".to_owned())),
-        };
-
-        Ok(
-            Measurement {
-                timestamp: timestamp,
-                name: measurement_name,
-                version: version,
-                dependencies: dependencies,
-                content: content,
-            }
-        )
-    }
-
-    pub fn from_capnproto(msg: &proddle_capnp::measurement::Reader) -> Result<Measurement, Error> {
-        let timestamp = match msg.get_timestamp() {
-            0 => None,
-            _ => Some(msg.get_timestamp()),
-        };
-
-        let measurement_name = msg.get_name().unwrap().to_owned();
-        let version = msg.get_version();
-
-        let dependencies = match msg.has_dependencies() {
-            true => Some(msg.get_dependencies().unwrap().iter().map(|x| x.unwrap().to_string()).collect()),
-            false => None,
-        };
-
-        let content = match msg.has_content() {
-            true => Some(msg.get_content().unwrap().to_owned()),
-            false => None,
-        };
-
-        Ok(
-            Measurement {
-                timestamp: timestamp,
-                name: measurement_name,
-                version: version,
-                dependencies: dependencies,
-                content: content,
-            }
-        )
-    }
-}
-
-/*
- * Operation
- */
-
-#[derive(Clone)]
-pub struct Operation {
-    pub timestamp: Option<u64>,
-    pub domain: String,
-    pub measurement: String,
-    pub interval: u32,
-}
-
-impl Operation {
-    pub fn from_mongodb(document: &OrderedDocument) -> Result<Operation, Error> {
-        let timestamp = match document.get("timestamp") {
-            Some(&Bson::I64(timestamp)) => Some(timestamp as u64),
-            _ => return Err(Error::Proddle("failed to parse timestamp as i64".to_owned())),
-        };
-
-        let domain = match document.get("domain") {
-            Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err(Error::Proddle("failed to domain as string".to_owned())),
-        };
-
-        let measurement = match document.get("measurement") {
-            Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err(Error::Proddle("failed to parse measurement name as string".to_owned())),
-        };
-
-        let interval = match document.get("interval") {
-            Some(&Bson::I32(interval)) => interval as u32,
-            _ => return Err(Error::Proddle("failed to parse interval as i32".to_owned())),
-        };
-
-        Ok(
-            Operation {
-                timestamp: timestamp,
-                domain: domain,
-                measurement: measurement,
-                interval: interval,
-            }
-        )
-    }
-
-    pub fn from_capnproto(msg: &proddle_capnp::operation::Reader) -> Result<Operation, Error> {
-        let timestamp = match msg.get_timestamp() {
-            0 => None,
-            _ => Some(msg.get_timestamp()),
-        };
-
-        let domain = msg.get_domain().unwrap().to_owned();
-        let measurement = msg.get_measurement().unwrap().to_owned();
-        let interval = msg.get_interval();
-
-        Ok(
-            Operation {
-                timestamp: timestamp,
-                domain: domain,
-                measurement: measurement,
-                interval: interval,
-            }
-        )
-    }
-}
-
-impl Hash for Operation {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.timestamp.hash(state);
-        self.domain.hash(state);
-        self.measurement.hash(state);
-    }
 }
 
 /*

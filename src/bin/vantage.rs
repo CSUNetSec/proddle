@@ -13,8 +13,7 @@ use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::App;
 use gj::EventLoop;
-use proddle::{Measurement, Operation};
-use proddle::error::Error;
+use proddle::{Error, Measurement, Operation};
 use proddle::proddle_capnp::proddle::Client;
 use threadpool::ThreadPool;
 
