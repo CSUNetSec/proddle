@@ -8,6 +8,8 @@ pub mod proddle_capnp {
     include!(concat!(env!("OUT_DIR"), "/proddle_capnp.rs"));
 }
 
+use error::Error;
+
 use bson::Bson;
 use bson::ordered::OrderedDocument;
 use mongodb::{Client, ClientInner, ThreadedClient};
@@ -64,30 +66,30 @@ impl Measurement {
         }
     }
 
-    pub fn from_mongodb(document: &OrderedDocument) -> Result<Measurement, String> {
+    pub fn from_mongodb(document: &OrderedDocument) -> Result<Measurement, Error> {
         let timestamp = match document.get("timestamp") {
             Some(&Bson::I64(timestamp)) => Some(timestamp as u64),
-            _ => return Err("failed to parse timestamp as i64".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse timestamp as i64".to_owned())),
         };
 
         let measurement_name = match document.get("name") {
             Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err("failed to parse name as string".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse name as string".to_owned())),
         };
 
         let version = match document.get("version") {
             Some(&Bson::I32(version)) => version as u16,
-            _ => return Err("failed to parse version as i32".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse version as i32".to_owned())),
         };
 
         let dependencies: Option<Vec<String>> = match document.get("dependencies") {
             Some(&Bson::Array(ref dependencies)) => Some(dependencies.iter().map(|x| x.to_string()).collect()),
-            _ => return Err("failed to parse dependencies as array".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse dependencies as array".to_owned())),
         };
         
         let content = match document.get("content") {
             Some(&Bson::String(ref content)) => Some(content.to_owned()),
-            _ => return Err("failed to parse content as string".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse content as string".to_owned())),
         };
 
         Ok(
@@ -101,7 +103,7 @@ impl Measurement {
         )
     }
 
-    pub fn from_capnproto(msg: &proddle_capnp::measurement::Reader) -> Result<Measurement, String> {
+    pub fn from_capnproto(msg: &proddle_capnp::measurement::Reader) -> Result<Measurement, Error> {
         let timestamp = match msg.get_timestamp() {
             0 => None,
             _ => Some(msg.get_timestamp()),
@@ -145,25 +147,25 @@ pub struct Operation {
 }
 
 impl Operation {
-    pub fn from_mongodb(document: &OrderedDocument) -> Result<Operation, String> {
+    pub fn from_mongodb(document: &OrderedDocument) -> Result<Operation, Error> {
         let timestamp = match document.get("timestamp") {
             Some(&Bson::I64(timestamp)) => Some(timestamp as u64),
-            _ => return Err("failed to parse timestamp as i64".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse timestamp as i64".to_owned())),
         };
 
         let domain = match document.get("domain") {
             Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err("failed to domain as string".to_owned()),
+            _ => return Err(Error::Proddle("failed to domain as string".to_owned())),
         };
 
         let measurement = match document.get("measurement") {
             Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err("failed to parse measurement name as string".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse measurement name as string".to_owned())),
         };
 
         let interval = match document.get("interval") {
             Some(&Bson::I32(interval)) => interval as u32,
-            _ => return Err("failed to parse interval as i32".to_owned()),
+            _ => return Err(Error::Proddle("failed to parse interval as i32".to_owned())),
         };
 
         Ok(
@@ -176,7 +178,7 @@ impl Operation {
         )
     }
 
-    pub fn from_capnproto(msg: &proddle_capnp::operation::Reader) -> Result<Operation, String> {
+    pub fn from_capnproto(msg: &proddle_capnp::operation::Reader) -> Result<Operation, Error> {
         let timestamp = match msg.get_timestamp() {
             0 => None,
             _ => Some(msg.get_timestamp()),
@@ -208,11 +210,11 @@ impl Hash for Operation {
 /*
  * MongoDB
  */
-pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, mongodb::Error> {
-    Client::connect(host, port)
+pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, Error> {
+    Ok(try!(Client::connect(host, port)))
 }
 
-pub fn find_measurement(client: Arc<ClientInner>, measurement_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, mongodb::Error> {
+pub fn find_measurement(client: Arc<ClientInner>, measurement_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, Error> {
     //create search document
     let search_document = match version {
         Some(search_version) => Some(doc! { "name" => measurement_name, "version" => search_version }),
@@ -243,10 +245,10 @@ pub fn find_measurement(client: Arc<ClientInner>, measurement_name: &str, versio
     });
 
     //execute find one
-    client.db("proddle").collection("measurements").find_one(search_document, find_options)
+    Ok(try!(client.db("proddle").collection("measurements").find_one(search_document, find_options)))
 }
 
-pub fn find_measurements(client: Arc<ClientInner>, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i32>, order_by_version: bool) -> Result<Cursor, mongodb::Error> {
+pub fn find_measurements(client: Arc<ClientInner>, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i32>, order_by_version: bool) -> Result<Cursor, Error> {
     //create search document
     let search_document = match measurement_name {
         Some(search_measurement_name) => {
@@ -287,10 +289,10 @@ pub fn find_measurements(client: Arc<ClientInner>, measurement_name: Option<&str
     });
 
     //execute find
-    client.db("proddle").collection("measurements").find(search_document, find_options)
+    Ok(try!(client.db("proddle").collection("measurements").find(search_document, find_options)))
 }
 
-pub fn find_operation(client: Arc<ClientInner>, domain: &str, measurement_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, mongodb::Error> {
+pub fn find_operation(client: Arc<ClientInner>, domain: &str, measurement_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, Error> {
     //create search document
     let search_document = match measurement_name {
         Some(search_measurement_name) => Some(doc! { "domain" => domain, "measurement" => search_measurement_name }),
@@ -321,10 +323,10 @@ pub fn find_operation(client: Arc<ClientInner>, domain: &str, measurement_name: 
     });
 
     //execute find one
-    client.db("proddle").collection("operations").find_one(search_document, find_options)
+    Ok(try!(client.db("proddle").collection("operations").find_one(search_document, find_options)))
 }
 
-pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i32>, order_by_timestamp: bool) -> Result<Cursor, mongodb::Error> {
+pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i32>, order_by_timestamp: bool) -> Result<Cursor, Error> {
     //create search document
     let search_document = match domain {
         Some(domain) => {
@@ -365,5 +367,5 @@ pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, measureme
     });
 
     //specify operations collection
-    client.db("proddle").collection("operations").find(search_document, find_options)
+    Ok(try!(client.db("proddle").collection("operations").find(search_document, find_options)))
 }

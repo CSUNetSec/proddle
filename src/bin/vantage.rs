@@ -218,13 +218,10 @@ fn main() {
         let operation_bucket_hashes = operation_bucket_hashes.clone();
         let loop_measurements_directory = measurements_directory.to_owned();
 
-        let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
+        let result = EventLoop::top_level(move |wait_scope| -> Result<(), Error> {
             //open stream
             let mut event_port = try!(gjio::EventPort::new());
-            let socket_addr = match SocketAddr::from_str(server_address) {
-                Ok(socket_addr) => socket_addr,
-                Err(e) => panic!("failed to parse socket address: {}", e),
-            };
+            let socket_addr = try!(SocketAddr::from_str(server_address));
 
             let tcp_address = event_port.get_network().get_tcp_address(socket_addr);
             let stream = try!(tcp_address.connect().wait(wait_scope, &mut event_port));
@@ -260,36 +257,21 @@ fn main() {
             {
                 let mut measurements = measurements.write().unwrap();
                 for result_measurement in result_measurements.iter() {
-                    let measurement = match Measurement::from_capnproto(&result_measurement) {
-                        Ok(measurement) => measurement,
-                        Err(e) => panic!("failed to parse capnproto to measurement: {}", e),
-                    };
-
-                    //println!("PROCESSING MODULE {} - {}",  measurement.name, measurement.version);
+                    let measurement = try!(Measurement::from_capnproto(&result_measurement));
 
                     if measurement.version == 0 {
                         //delete file
-                        if let Err(e) =  std::fs::remove_file(format!("{}/{}", loop_measurements_directory, measurement.name)) {
-                            panic!("failed to delete measurement file '{}': {}", measurement.name, e);
-                        }
+                        try!(std::fs::remove_file(format!("{}/{}", loop_measurements_directory, measurement.name)));
 
                         //remove from measurements data structures
                         measurements.remove(&measurement.name);
                     } else {
                         //create file
-                        let mut file = match File::create(format!("{}/{}", loop_measurements_directory, measurement.name)) {
-                            Ok(file) => file,
-                            Err(e) => panic!("failed to create measurements file '{}': {}", measurement.name, e),
-                        };
+                        let mut file = try!(File::create(format!("{}/{}", loop_measurements_directory, measurement.name)));
 
                         let content = measurement.content.clone().unwrap().into_bytes();
-                        if let Err(e) = file.write_all(&content) {
-                            panic!("failed to write content to measurement file '{}': {}", measurement.name, e);
-                        }
-
-                        if let Err(e) = file.flush() {
-                            panic!("failed to flush file content to measurement file '{}': {}", measurement.name, e);
-                        }
+                        try!(file.write_all(&content));
+                        try!(file.flush());
 
                         //add to measurements data structure
                         measurements.insert(measurement.name.to_owned(), measurement);
