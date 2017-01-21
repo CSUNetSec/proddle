@@ -4,7 +4,8 @@
 A distributed network measurement tool.
 
 ##TODO
-- fix error handling in lib functions
+- start logging for vantage and server
+- fix error handling everywhere
 - tags to allow/disallow probes to run on a vantage
 - validate hostname and ip address on vantage
 - validate module scripts before they're uploaded

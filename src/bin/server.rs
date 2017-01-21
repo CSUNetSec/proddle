@@ -131,7 +131,7 @@ impl Server for ServerImpl {
                     //parse mongodb document into measurement
                     let measurement = match Measurement::from_mongodb(&document) {
                         Ok(measurement) => measurement,
-                        Err(e) => panic!("failed to parse mongodb document into measurement: {}", e),
+                        Err(e) => return Promise::err(capnp::Error::failed(format!("failed to parse mongodb document into measurement: {}", e))),
                     };
 
                     //check if measurement name already exists and/or version comparrison
@@ -160,7 +160,7 @@ impl Server for ServerImpl {
         for measurement in param_measurements.iter() {
             let measurement_name = match measurement.get_name() {
                 Ok(name) => name,
-                Err(e) => panic!("failed to retrieve name from measurement: {}", e),
+                Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve name from measurement: {}", e))),
             };
 
             let entry = measurements.entry(measurement_name.to_owned());
@@ -236,25 +236,25 @@ impl Server for ServerImpl {
                     //parse mongodb document into measurement
                     let operation = match Operation::from_mongodb(&document) {
                         Ok(operation) => operation,
-                        Err(e) => panic!("failed to parse mongodb document into operation: {}", e),
+                        Err(e) => return Promise::err(capnp::Error::failed(format!("failed to parse mongodb document into operation: {}", e))),
                     };
 
                     //hash domain to determine bucket key
                     let domain_hash = proddle::hash_string(&operation.domain);
                     let bucket_key = match proddle::get_bucket_key(&bucket_hashes, domain_hash) {
                         Some(bucket_key) => bucket_key,
-                        None => panic!("failed to determine correct bucket key for domain hash: {}", domain_hash),
+                        None => return Promise::err(capnp::Error::failed(format!("failed to determine correct bucket key for domain hash: {}", domain_hash))),
                     };
 
                     //add operation to bucket hashes and operations maps
                     match bucket_hashes.get_mut(&bucket_key) {
                         Some(mut hasher) => operation.hash(hasher),
-                        None => panic!("failed to retrieve hasher: {}", bucket_key),
+                        None => return Promise::err(capnp::Error::failed(format!("failed to retrieve hasher: {}", bucket_key))),
                     };
 
                     match operations.get_mut(&bucket_key) {
                         Some(mut vec) => vec.push(operation),
-                        None => panic!("failed to retrieve bucket: {}", bucket_key),
+                        None => return Promise::err(capnp::Error::failed(format!("failed to retrieve bucket: {}", bucket_key))),
                     };
                 }
             },
