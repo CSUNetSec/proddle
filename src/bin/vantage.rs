@@ -2,20 +2,24 @@ extern crate capnp;
 extern crate capnp_rpc;
 #[macro_use]
 extern crate clap;
-extern crate gj;
-extern crate gjio;
+extern crate futures;
 extern crate proddle;
-extern crate time;
 extern crate threadpool;
+extern crate time;
+extern crate tokio_core;
 
+use capnp::capability::Promise;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::App;
-use gj::EventLoop;
+use futures::Future;
 use proddle::{Error, Measurement, Operation};
 use proddle::proddle_capnp::proddle::Client;
 use threadpool::ThreadPool;
+use tokio_core::io::Io;
+use tokio_core::net::TcpStream;
+use tokio_core::reactor::Core;
 
 use std::cmp::{Ordering, PartialOrd};
 use std::collections::{BinaryHeap, HashMap};
@@ -27,9 +31,8 @@ use std::net::SocketAddr;
 use std::process::Command;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
-use std::sync::mpsc::channel;
 
-fn main() {
+pub fn main() {
     let yaml = load_yaml!("vantage_args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
@@ -78,7 +81,7 @@ fn main() {
     }
 
     //create result channels
-    let (tx, rx) = channel();
+    let (tx, rx) = std::sync::mpsc::channel();
 
     //start recv result channel
     let thread_server_address = server_address.clone();
@@ -93,51 +96,10 @@ fn main() {
             };
 
             if result_buffer.len() >= result_batch_size && time::now_utc().to_timespec().sec > failure_retry_time {
-                //send results to a server
-                let result;
-                {
-                    let result_buffer_borrow = &result_buffer;
-                    let pool_server_address = &thread_server_address;
-                    result = EventLoop::top_level(move |wait_scope| -> Result<(), Error> {
-                        //open stream
-                        let mut event_port = try!(gjio::EventPort::new());
-                        let socket_addr = try!(SocketAddr::from_str(pool_server_address));
-
-                        let tcp_address = event_port.get_network().get_tcp_address(socket_addr);
-                        let stream = try!(tcp_address.connect().wait(wait_scope, &mut event_port));
-
-                        //connect rpc client
-                        let network = Box::new(VatNetwork::new(stream.clone(), stream, Side::Client, Default::default()));
-                        let mut rpc_system = RpcSystem::new(network, None);
-                        let proddle: Client = rpc_system.bootstrap(Side::Server);
-
-                        //send results
-                        let mut request = proddle.send_results_request();
-                        {
-                            let mut request_results = request.get().init_results(result_buffer_borrow.len() as u32);
-                            for (i, result) in result_buffer_borrow.iter().enumerate() {
-                                let mut request_result = request_results.borrow().get(i as u32);
-                                request_result.set_json_string(result);
-                            }
-                        }
-
-                        //send results request
-                        let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
-                        try!(response.get());
-
-                        Ok(())
-                    });
-                }
-
-                if let Err(e) = result {
-                    println!("failed in the send results event loop: {}", e);
-
-                    //don't retry for another 10 minutes
+                if let Err(e) = send_results(&mut result_buffer, &thread_server_address) {
+                    println!("failed to send results: {}", e);
                     failure_retry_time = time::now_utc().to_timespec().sec + (60 * 10);
-                } else {
-                    //clear result buffer
-                    result_buffer.clear();
-                }
+                };
             }
         }
     });
@@ -212,125 +174,156 @@ fn main() {
 
     //start loop to periodically request measurements and operations
     loop {
-        let measurements = measurements.clone();
-        let operations = operations.clone();
-        let operation_bucket_hashes = operation_bucket_hashes.clone();
-        let loop_measurements_directory = measurements_directory.to_owned();
-
-        let result = EventLoop::top_level(move |wait_scope| -> Result<(), Error> {
-            //open stream
-            let mut event_port = try!(gjio::EventPort::new());
-            let socket_addr = try!(SocketAddr::from_str(server_address));
-
-            let tcp_address = event_port.get_network().get_tcp_address(socket_addr);
-            let stream = try!(tcp_address.connect().wait(wait_scope, &mut event_port));
-
-            //connect rpc client
-            let network = Box::new(VatNetwork::new(stream.clone(), stream, Side::Client, Default::default()));
-            let mut rpc_system = RpcSystem::new(network, None);
-            let proddle: Client = rpc_system.bootstrap(Side::Server);
-
-            //populate get measurements request
-            let mut request = proddle.get_measurements_request();
-            {
-                let measurements = measurements.read().unwrap();
-                let mut request_measurements = request.get().init_measurements(measurements.len() as u32);
-                for (i, measurement) in measurements.values().enumerate() {
-                    let mut request_measurement = request_measurements.borrow().get(i as u32);
-
-                    if let Some(timestamp) = measurement.timestamp {
-                        request_measurement.set_timestamp(timestamp);
-                    }
-
-                    request_measurement.set_name(&measurement.name);
-                    request_measurement.set_version(measurement.version);
-                }
-            }
-
-            //send measurements request
-            let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
-            let reader = try!(response.get());
-            let result_measurements = try!(reader.get_measurements());
-
-            //process result measurements
-            {
-                let mut measurements = measurements.write().unwrap();
-                for result_measurement in result_measurements.iter() {
-                    let measurement = try!(Measurement::from_capnproto(&result_measurement));
-
-                    if measurement.version == 0 {
-                        //delete file
-                        try!(std::fs::remove_file(format!("{}/{}", loop_measurements_directory, measurement.name)));
-
-                        //remove from measurements data structures
-                        measurements.remove(&measurement.name);
-                    } else {
-                        //create file
-                        let mut file = try!(File::create(format!("{}/{}", loop_measurements_directory, measurement.name)));
-
-                        let content = measurement.content.clone().unwrap().into_bytes();
-                        try!(file.write_all(&content));
-                        try!(file.flush());
-
-                        //add to measurements data structure
-                        measurements.insert(measurement.name.to_owned(), measurement);
-                    }
-                }
-            }
-
-            //populate get operations request
-            let mut request = proddle.get_operations_request();
-            {
-                let operation_bucket_hashes = operation_bucket_hashes.read().unwrap();
-                let mut request_bucket_hashes = request.get().init_bucket_hashes(operation_bucket_hashes.len() as u32);
-                for (i, (bucket_key, bucket_hash)) in operation_bucket_hashes.iter().enumerate() {
-                    let mut request_bucket_hash = request_bucket_hashes.borrow().get(i as u32);
-
-                    request_bucket_hash.set_bucket(*bucket_key);
-                    request_bucket_hash.set_hash(*bucket_hash);
-                }
-            }
-
-            //send operations request
-            let response = try!(request.send().promise.wait(wait_scope, &mut event_port));
-            let reader = try!(response.get());
-            let result_operation_buckets = try!(reader.get_operation_buckets());
-
-            //process result operations
-            {
-                let mut operations = operations.write().unwrap();
-                let mut operation_bucket_hashes = operation_bucket_hashes.write().unwrap();
-                for result_operation_bucket in result_operation_buckets.iter() {
-                    let mut binary_heap = BinaryHeap::new();
-                    let mut hasher = DefaultHasher::new();
-                    for result_operation in try!(result_operation_bucket.get_operations()).iter() {
-                        //println!("PROCESSING OPERATION {} - {}", result_operation.get_domain().unwrap(), result_operation.get_measurement().unwrap());
-
-                        //add operation to binary heap
-                        match Operation::from_capnproto(&result_operation) {
-                            Ok(operation) => {
-                                operation.hash(&mut hasher);
-                                binary_heap.push(OperationJob::new(operation));
-                            },
-                            Err(e) => panic!("failed to parse capnproto to operation: {}", e),
-                        };
-                    }
-
-                    //insert new operations into operations map
-                    operations.insert(result_operation_bucket.get_bucket(), binary_heap);
-                    operation_bucket_hashes.insert(result_operation_bucket.get_bucket(), hasher.finish());
-                }
-            }
-
-            Ok(())
-        });
-
-        if let Err(e) = result {
-            println!("get measurements/operations event loop failed: {}", e);
+        if let Err(e) = poll_server(measurements.clone(), &measurements_directory, operations.clone(), operation_bucket_hashes.clone(), server_address) {
+            println!("failed to poll server: {}", e);
         }
 
         std::thread::sleep(std::time::Duration::new(server_poll_interval_seconds, 0))
     }
+}
+
+fn send_results(result_buffer: &mut Vec<String>, server_address: &str) -> Result<(), Error> {
+    //open stream
+    let mut core = try!(Core::new());
+    let handle = core.handle();
+                        
+    let socket_addr = try!(SocketAddr::from_str(server_address));
+    let stream = try!(core.run(TcpStream::connect(&socket_addr, &handle)));
+
+    try!(stream.set_nodelay(true));
+    let (reader, writer) = stream.split();
+
+    let network = Box::new(VatNetwork::new(reader, writer, Side::Client, Default::default()));
+    let mut rpc_system = RpcSystem::new(network, None);
+    let proddle: Client = rpc_system.bootstrap(Side::Server);
+    handle.spawn(rpc_system.map_err(|e| println!("ERROR: {:?}", e)));
+
+    //initialize request
+    let mut request = proddle.send_results_request();
+    {
+        let mut request_results = request.get().init_results(result_buffer.len() as u32);
+        for (i, result) in result_buffer.iter().enumerate() {
+            let mut request_result = request_results.borrow().get(i as u32);
+            request_result.set_json_string(result);
+        }
+    }
+
+    //send request and read response
+    try!(
+        core.run(request.send().promise.and_then(|_| {
+            Promise::ok(())
+        }))
+    );
+
+    //clear result buffer
+    result_buffer.clear();
+    Ok(())
+}
+
+fn poll_server(
+        measurements: Arc<RwLock<HashMap<String, Measurement>>>,
+        measurements_directory: &str,
+        operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>>,
+        operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>>,
+        server_address: &str) -> Result<(), Error> {
+    //open stream
+    let mut core = try!(Core::new());
+    let handle = core.handle();
+                        
+    let socket_addr = try!(SocketAddr::from_str(server_address));
+    let stream = try!(core.run(TcpStream::connect(&socket_addr, &handle)));
+
+    try!(stream.set_nodelay(true));
+    let (reader, writer) = stream.split();
+
+    let network = Box::new(VatNetwork::new(reader, writer, Side::Client, Default::default()));
+    let mut rpc_system = RpcSystem::new(network, None);
+    let proddle: Client = rpc_system.bootstrap(Side::Server);
+    handle.spawn(rpc_system.map_err(|e| println!("ERROR: {:?}", e)));
+
+    //populate get measurements request
+    let mut request = proddle.get_measurements_request();
+    {
+        let measurements = measurements.read().unwrap();
+        let mut request_measurements = request.get().init_measurements(measurements.len() as u32);
+        for (i, measurement) in measurements.values().enumerate() {
+            let mut request_measurement = request_measurements.borrow().get(i as u32);
+
+            if let Some(timestamp) = measurement.timestamp {
+                request_measurement.set_timestamp(timestamp);
+            }
+
+            request_measurement.set_name(&measurement.name);
+            request_measurement.set_version(measurement.version);
+        }
+    }
+
+    //send get measurements request
+    let response = try!(core.run(request.send().promise));
+    {
+        let result_measurements = try!(try!(response.get()).get_measurements());
+        
+        let mut measurements = measurements.write().unwrap();
+        for result_measurement in result_measurements.iter() {
+            let measurement = try!(Measurement::from_capnproto(&result_measurement));
+            if measurement.version == 0 {
+                //delete file
+                try!(std::fs::remove_file(format!("{}/{}", measurements_directory, measurement.name)));
+
+                //remove from measurements data structures
+                measurements.remove(&measurement.name);
+            } else {
+                //create file
+                let mut file = try!(File::create(format!("{}/{}", measurements_directory, measurement.name)));
+
+                let content = measurement.content.clone().unwrap().into_bytes();
+                try!(file.write_all(&content));
+                try!(file.flush());
+
+                //add to measurements data structure
+                measurements.insert(measurement.name.to_owned(), measurement);
+            }
+        }
+    }
+
+    //populate get operations request
+    let mut request = proddle.get_operations_request();
+    {
+        let operation_bucket_hashes = operation_bucket_hashes.read().unwrap();
+        let mut request_bucket_hashes = request.get().init_bucket_hashes(operation_bucket_hashes.len() as u32);
+        for (i, (bucket_key, bucket_hash)) in operation_bucket_hashes.iter().enumerate() {
+            let mut request_bucket_hash = request_bucket_hashes.borrow().get(i as u32);
+
+            request_bucket_hash.set_bucket(*bucket_key);
+            request_bucket_hash.set_hash(*bucket_hash);
+        }
+    }
+
+    //send get operations request
+    let response = try!(core.run(request.send().promise));
+    {
+        let result_operation_buckets = try!(try!(response.get()).get_operation_buckets());
+
+        let mut operations = operations.write().unwrap();
+        let mut operation_bucket_hashes = operation_bucket_hashes.write().unwrap();
+        for result_operation_bucket in result_operation_buckets.iter() {
+            let mut binary_heap = BinaryHeap::new();
+            let mut hasher = DefaultHasher::new();
+            for result_operation in try!(result_operation_bucket.get_operations()).iter() {
+                //add operation to binary heap
+                let operation = try!(Operation::from_capnproto(&result_operation));
+
+                operation.hash(&mut hasher);
+                binary_heap.push(OperationJob::new(operation));
+            }
+
+            //insert new operations into operations map
+            operations.insert(result_operation_bucket.get_bucket(), binary_heap);
+            operation_bucket_hashes.insert(result_operation_bucket.get_bucket(), hasher.finish());
+        }
+    }
+
+    Ok(())
 }
 
 /*

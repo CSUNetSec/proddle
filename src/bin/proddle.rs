@@ -1,14 +1,14 @@
 extern crate bson;
 extern crate capnp;
+#[macro_use]
 extern crate capnp_rpc;
 #[macro_use]
 extern crate clap;
-#[macro_use]
-extern crate gj;
-extern crate gjio;
+extern crate futures;
 extern crate mongodb;
 extern crate proddle;
 extern crate rustc_serialize;
+extern crate tokio_core;
 
 use bson::Bson;
 use capnp::capability::Promise;
@@ -16,14 +16,16 @@ use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::App;
-use gj::{EventLoop, TaskReaper, TaskSet};
-use gjio::SocketListener;
+use futures::{Future, Stream};
 use mongodb::ThreadedClient;
 use mongodb::db::ThreadedDatabase;
 use proddle::{Measurement, Operation};
 use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
-use proddle::proddle_capnp::proddle::{Client, Server, ToClient};
+use proddle::proddle_capnp::proddle::{Server, ToClient};
 use rustc_serialize::json::Json;
+use tokio_core::net::TcpListener;
+use tokio_core::io::Io;
+use tokio_core::reactor::Core;
 
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::{DefaultHasher, Entry};
@@ -31,8 +33,8 @@ use std::hash::{Hash, Hasher};
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-fn main() {
-    let yaml = load_yaml!("server_args.yaml");
+pub fn main() {
+    let yaml = load_yaml!("proddle_args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
     //initialize server parameters
@@ -43,52 +45,36 @@ fn main() {
         Err(e) => panic!("failed to parse mongodb_port as u16: {}", e),
     };
 
-    let result = EventLoop::top_level(move |wait_scope| -> Result<(), capnp::Error> {
-        //open tcp listener
-        let mut event_port = try!(gjio::EventPort::new());
-        let socket_addr = match SocketAddr::from_str(&listen_socket_address) {
-            Ok(socket_addr) => socket_addr,
-            Err(e) => panic!("failed to parse socket address: {}", e),
-        };
+    //pasre socket address
+    let socket_addr = match SocketAddr::from_str(&listen_socket_address) {
+        Ok(socket_addr) => socket_addr,
+        Err(e) => panic!("failed to parse socket address: {}", e),
+    };
 
-        let mut tcp_address = event_port.get_network().get_tcp_address(socket_addr);
-        let listener = try!(tcp_address.listen());
+    //initialize tokio core
+    let mut core = Core::new().unwrap();
+    let handle = core.handle();
+    let socket = TcpListener::bind(&socket_addr, &handle).unwrap();
 
-        //start server
-        let proddle = ToClient::new(ServerImpl::new(mongodb_ip_address, mongodb_port)).from_server::<capnp_rpc::Server>();
-        let task_set = TaskSet::new(Box::new(Reaper));
+    //initialize proddle server
+    let proddle = ToClient::new(ServerImpl::new(mongodb_ip_address, mongodb_port)).from_server::<capnp_rpc::Server>();
+    
+    //start rpc loop
+    let done = socket.incoming().for_each(move |(socket, _addr)| {
+        try!(socket.set_nodelay(true));
+        let (reader, writer) = socket.split();
 
-        //accept connection
-        try!(accept_loop(listener, task_set, proddle).wait(wait_scope, &mut event_port));
-
+        let handle = handle.clone();
+        let network = VatNetwork::new(reader, writer, Side::Server, Default::default());
+        let rpc_system = RpcSystem::new(Box::new(network), Some(proddle.clone().client));
+        handle.spawn(rpc_system.map_err(|e| println!("ERROR: {:?}", e)));
+        
         Ok(())
     });
 
-    if let Err(e) = result {
-        panic!("event loop failed: {}", e);
-    }
+    core.run(done).unwrap();
 }
 
-struct Reaper;
-
-impl TaskReaper<(), capnp::Error> for Reaper {
-    fn task_failed(&mut self, error: capnp::Error) {
-        println!("task failed: {}", error)
-    }
-}
-
-fn accept_loop(listener: SocketListener, mut task_set: TaskSet<(), capnp::Error>, proddle: Client) -> Promise<(), std::io::Error> {
-    //TODO understand this code - right now it's a black box
-    listener.accept().then(move |stream| {
-        let mut network = VatNetwork::new(stream.clone(), stream, Side::Server, Default::default());
-        let disconnect_promise = network.on_disconnect();
-
-        let rpc_system = RpcSystem::new(Box::new(network), Some(proddle.clone().client));
-
-        task_set.add(disconnect_promise.attach(rpc_system));
-        accept_loop(listener, task_set, proddle)
-    })
-}
 
 struct ServerImpl {
     mongodb_host: String,
@@ -106,8 +92,7 @@ impl ServerImpl {
 
 impl Server for ServerImpl {
     fn get_measurements(&mut self, params: GetMeasurementsParams<>, mut results: GetMeasurementsResults<>) -> Promise<(), capnp::Error> {
-        let params = pry!(params.get());
-        let param_measurements = pry!(params.get_measurements());
+        let param_measurements = pry!(pry!(params.get()).get_measurements());
         
         //connect to mongodb
         let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
@@ -204,8 +189,7 @@ impl Server for ServerImpl {
     }
 
     fn get_operations(&mut self, params: GetOperationsParams<>, mut results: GetOperationsResults<>) -> Promise<(), capnp::Error> {
-        let params = pry!(params.get());
-        let param_bucket_hashes = pry!(params.get_bucket_hashes());
+        let param_bucket_hashes = pry!(pry!(params.get()).get_bucket_hashes());
 
         //initialize server side bucket hashes
         let mut bucket_hashes = BTreeMap::new();
@@ -298,8 +282,7 @@ impl Server for ServerImpl {
     }
 
     fn send_results(&mut self, params: SendResultsParams<>, _: SendResultsResults<>) -> Promise<(), capnp::Error> {
-        let params = pry!(params.get());
-        let param_results = pry!(params.get_results());
+        let param_results = pry!(pry!(params.get()).get_results());
 
         //connect to mongodb
         let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
