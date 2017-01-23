@@ -17,7 +17,7 @@ use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::App;
 use futures::{Future, Stream};
-use mongodb::ThreadedClient;
+use mongodb::{Client, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
 use proddle::{Measurement, Operation};
 use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
@@ -56,8 +56,14 @@ pub fn main() {
     let handle = core.handle();
     let socket = TcpListener::bind(&socket_addr, &handle).unwrap();
 
+    //connect to mongodb
+    let client = match Client::connect(mongodb_ip_address, mongodb_port)  {
+        Ok(client) => client,
+        Err(e) => panic!("failed to connect to mongodb: {}", e),
+    };
+
     //initialize proddle server
-    let proddle = ToClient::new(ServerImpl::new(mongodb_ip_address, mongodb_port)).from_server::<capnp_rpc::Server>();
+    let proddle = ToClient::new(ServerImpl::new(client)).from_server::<capnp_rpc::Server>();
     
     //start rpc loop
     let done = socket.incoming().for_each(move |(socket, _addr)| {
@@ -77,15 +83,13 @@ pub fn main() {
 
 
 struct ServerImpl {
-    mongodb_host: String,
-    mongodb_port: u16,
+    mongodb_client: Client,
 }
 
 impl ServerImpl {
-    pub fn new(mongodb_host: &str, mongodb_port: u16) -> ServerImpl {
+    pub fn new(mongodb_client: Client) -> ServerImpl {
         ServerImpl {
-            mongodb_host: mongodb_host.to_owned(),
-            mongodb_port: mongodb_port,
+            mongodb_client: mongodb_client,
         }
     }
 }
@@ -94,15 +98,9 @@ impl Server for ServerImpl {
     fn get_measurements(&mut self, params: GetMeasurementsParams<>, mut results: GetMeasurementsResults<>) -> Promise<(), capnp::Error> {
         let param_measurements = pry!(pry!(params.get()).get_measurements());
         
-        //connect to mongodb
-        let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
-            Ok(client) => client,
-            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to connect to mongodb: {}", e))),
-        };
-
         //iterate over measurements in mongodb and store in measurements map
         let mut measurements = HashMap::new();
-        match proddle::find_measurements(client.clone(), None, None, None, false) {
+        match proddle::find_measurements(self.mongodb_client.clone(), None, None, None, false) {
             Ok(cursor) => {
                 for document in cursor {
                     let document = match document {
@@ -199,14 +197,8 @@ impl Server for ServerImpl {
             operations.insert(bucket_hash.get_bucket(), Vec::new());
         }
         
-        //connect to mongodb
-        let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
-            Ok(client) => client,
-            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to connect to mongodb: {}", e))),
-        };
-
         //iterate over operations in mongodb and store in operations map
-        match proddle::find_operations(client.clone(), None, None, None, false) {
+        match proddle::find_operations(self.mongodb_client.clone(), None, None, None, false) {
             Ok(cursor) => {
                 for document in cursor {
                     let document = match document {
@@ -284,12 +276,6 @@ impl Server for ServerImpl {
     fn send_results(&mut self, params: SendResultsParams<>, _: SendResultsResults<>) -> Promise<(), capnp::Error> {
         let param_results = pry!(pry!(params.get()).get_results());
 
-        //connect to mongodb
-        let client = match proddle::get_mongodb_client(&self.mongodb_host, self.mongodb_port) {
-            Ok(client) => client,
-            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to connect to mongodb: {}", e))),
-        };
-
         //iterate over results
         for param_result in param_results.iter() {
             let json_string = param_result.get_json_string().unwrap();
@@ -306,7 +292,7 @@ impl Server for ServerImpl {
             };
 
             //insert document
-            if let Err(e) = client.db("proddle").collection("results").insert_one(document, None) {
+            if let Err(e) = self.mongodb_client.db("proddle").collection("results").insert_one(document, None) {
                 return Promise::err(capnp::Error::failed(format!("failed to insert result: {}", e)));
             }
         }
