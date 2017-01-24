@@ -18,7 +18,7 @@ do
     DOMAIN=`echo $LINE | cut -f 2 -d ','`
 
     #echo $DOMAIN
-    ./../target/debug/yogi operation add -i 14400 http-get.py $DOMAIN
+    ./../target/debug/yogi operation add -i 14400 http-get $DOMAIN
 
     #increment counter
     COUNT=$[COUNT+1]
