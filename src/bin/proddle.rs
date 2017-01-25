@@ -1,3 +1,4 @@
+extern crate env_logger;
 extern crate bson;
 extern crate capnp;
 #[macro_use]
@@ -5,6 +6,8 @@ extern crate capnp_rpc;
 #[macro_use]
 extern crate clap;
 extern crate futures;
+#[macro_use]
+extern crate log;
 extern crate mongodb;
 extern crate proddle;
 extern crate rustc_serialize;
@@ -34,10 +37,12 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 
 pub fn main() {
+    env_logger::init().unwrap();
     let yaml = load_yaml!("proddle_args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
     //initialize server parameters
+    info!("parsing command line arguments");
     let listen_socket_address = format!("{}:{}", matches.value_of("SERVER_IP_ADDRESS").unwrap(), matches.value_of("SERVER_PORT").unwrap());
     let mongodb_ip_address = matches.value_of("MONGODB_IP_ADDRESS").unwrap();
     let mongodb_port = match matches.value_of("MONGODB_PORT").unwrap().parse::<u16>() {
@@ -63,9 +68,11 @@ pub fn main() {
     };
 
     //initialize proddle server
+    info!("initializing server data strucutes");
     let proddle = ToClient::new(ServerImpl::new(client)).from_server::<capnp_rpc::Server>();
     
     //start rpc loop
+    info!("service started");
     let done = socket.incoming().for_each(move |(socket, _addr)| {
         try!(socket.set_nodelay(true));
         let (reader, writer) = socket.split();
@@ -73,7 +80,7 @@ pub fn main() {
         let handle = handle.clone();
         let network = VatNetwork::new(reader, writer, Side::Server, Default::default());
         let rpc_system = RpcSystem::new(Box::new(network), Some(proddle.clone().client));
-        handle.spawn(rpc_system.map_err(|e| println!("ERROR: {:?}", e)));
+        handle.spawn(rpc_system.map_err(|e| error!("{:?}", e)));
         
         Ok(())
     });
@@ -81,6 +88,15 @@ pub fn main() {
     core.run(done).unwrap();
 }
 
+macro_rules! cry {
+    ($e:expr) => (match $e {
+        Ok(val) => val,
+        Err(e) => {
+            error!("{}", e);
+            return Promise::err(capnp::Error::failed(String::from("internal server error")));
+        }
+    });
+}
 
 struct ServerImpl {
     mongodb_client: Client,
@@ -96,55 +112,40 @@ impl ServerImpl {
 
 impl Server for ServerImpl {
     fn get_measurements(&mut self, params: GetMeasurementsParams<>, mut results: GetMeasurementsResults<>) -> Promise<(), capnp::Error> {
+        info!("received get_measurements request");
         let param_measurements = pry!(pry!(params.get()).get_measurements());
         
         //iterate over measurements in mongodb and store in measurements map
         let mut measurements = HashMap::new();
-        match proddle::find_measurements(self.mongodb_client.clone(), None, None, None, false) {
-            Ok(cursor) => {
-                for document in cursor {
-                    let document = match document {
-                        Ok(document) => document,
-                        Err(e) => {
-                            println!("failed to fetch document: {}", e);
-                            continue;
-                        }
-                    };
+        let cursor = cry!(proddle::find_measurements(self.mongodb_client.clone(), None, None, None, false));
+        for document in cursor {
+            let document = cry!(document);
 
-                    //parse mongodb document into measurement
-                    let measurement = match Measurement::from_mongodb(&document) {
-                        Ok(measurement) => measurement,
-                        Err(e) => return Promise::err(capnp::Error::failed(format!("failed to parse mongodb document into measurement: {}", e))),
-                    };
+            //parse mongodb document into measurement
+            let measurement = cry!(Measurement::from_mongodb(&document));
 
-                    //check if measurement name already exists and/or version comparrison
-                    let entry = measurements.entry(measurement.name.to_owned());
-                    if let Entry::Occupied(mut occupied_entry) = entry {
-                        let replace;
-                        {
-                            let entry: &Measurement = occupied_entry.get();
-                            replace = measurement.version > entry.version;
-                        }
-                        
-                        //if version is newer then replace
-                        if replace {
-                            occupied_entry.insert(measurement);
-                        }
-                    } else if let Entry::Vacant(vacant_entry) = entry {
-                        //if entry does not exist then insert
-                        vacant_entry.insert(measurement);
-                    }
+            //check if measurement name already exists and/or version comparrison
+            let entry = measurements.entry(measurement.name.to_owned());
+            if let Entry::Occupied(mut occupied_entry) = entry {
+                let replace;
+                {
+                    let entry: &Measurement = occupied_entry.get();
+                    replace = measurement.version > entry.version;
                 }
-            },
-            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve measurements: {}", e))),
+                
+                //if version is newer then replace
+                if replace {
+                    occupied_entry.insert(measurement);
+                }
+            } else if let Entry::Vacant(vacant_entry) = entry {
+                //if entry does not exist then insert
+                vacant_entry.insert(measurement);
+            }
         }
 
         //compare vantage measurement versions to mongodb versions
         for measurement in param_measurements.iter() {
-            let measurement_name = match measurement.get_name() {
-                Ok(name) => name,
-                Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve name from measurement: {}", e))),
-            };
+            let measurement_name = cry!(measurement.get_name());
 
             let entry = measurements.entry(measurement_name.to_owned());
             if let Entry::Occupied(occupied_entry) = entry {
@@ -187,6 +188,7 @@ impl Server for ServerImpl {
     }
 
     fn get_operations(&mut self, params: GetOperationsParams<>, mut results: GetOperationsResults<>) -> Promise<(), capnp::Error> {
+        info!("received get_operations request");
         let param_bucket_hashes = pry!(pry!(params.get()).get_bucket_hashes());
 
         //initialize server side bucket hashes
@@ -198,43 +200,23 @@ impl Server for ServerImpl {
         }
         
         //iterate over operations in mongodb and store in operations map
-        match proddle::find_operations(self.mongodb_client.clone(), None, None, None, false) {
-            Ok(cursor) => {
-                for document in cursor {
-                    let document = match document {
-                        Ok(document) => document,
-                        Err(e) => {
-                            println!("failed to fetch document: {}", e);
-                            continue;
-                        }
-                    };
+        let cursor = cry!(proddle::find_operations(self.mongodb_client.clone(), None, None, None, false));
+        for document in cursor {
+            let document = cry!(document);
 
-                    //parse mongodb document into measurement
-                    let operation = match Operation::from_mongodb(&document) {
-                        Ok(operation) => operation,
-                        Err(e) => return Promise::err(capnp::Error::failed(format!("failed to parse mongodb document into operation: {}", e))),
-                    };
+            //parse mongodb document into measurement
+            let operation = cry!(Operation::from_mongodb(&document));
 
-                    //hash domain to determine bucket key
-                    let domain_hash = proddle::hash_string(&operation.domain);
-                    let bucket_key = match proddle::get_bucket_key(&bucket_hashes, domain_hash) {
-                        Some(bucket_key) => bucket_key,
-                        None => return Promise::err(capnp::Error::failed(format!("failed to determine correct bucket key for domain hash: {}", domain_hash))),
-                    };
+            //hash domain to determine bucket key
+            let domain_hash = proddle::hash_string(&operation.domain);
+            let bucket_key = cry!(proddle::get_bucket_key(&bucket_hashes, domain_hash).ok_or("failed to retrieve bucket_key"));
 
-                    //add operation to bucket hashes and operations maps
-                    match bucket_hashes.get_mut(&bucket_key) {
-                        Some(mut hasher) => operation.hash(hasher),
-                        None => return Promise::err(capnp::Error::failed(format!("failed to retrieve hasher: {}", bucket_key))),
-                    };
+            //add operation to bucket hashes and operations maps
+            let mut hasher = cry!(bucket_hashes.get_mut(&bucket_key).ok_or("failed to retrieve hasher"));
+            operation.hash(hasher);
 
-                    match operations.get_mut(&bucket_key) {
-                        Some(mut vec) => vec.push(operation),
-                        None => return Promise::err(capnp::Error::failed(format!("failed to retrieve bucket: {}", bucket_key))),
-                    };
-                }
-            },
-            Err(e) => return Promise::err(capnp::Error::failed(format!("failed to retrieve operations: {}", e))),
+            let mut vec = cry!(operations.get_mut(&bucket_key).ok_or("failed to retrieve bucket"));
+            vec.push(operation);
         }
 
         //compare vantage hashes to server hashes
@@ -281,6 +263,7 @@ impl Server for ServerImpl {
     }
 
     fn send_results(&mut self, params: SendResultsParams<>, _: SendResultsResults<>) -> Promise<(), capnp::Error> {
+        info!("received send_results request");
         let param_results = pry!(pry!(params.get()).get_results());
 
         //iterate over results
@@ -288,20 +271,14 @@ impl Server for ServerImpl {
             let json_string = param_result.get_json_string().unwrap();
 
             //parse json string into Bson::Document
-            let json = match Json::from_str(json_string) {
-                Ok(json) => json,
-                Err(e) => return Promise::err(capnp::Error::failed(format!("failed to parse json: {}", e))),
-            };
-
+            let json = cry!(Json::from_str(json_string));
             let document: bson::Document = match Bson::from_json(&json) {
                 Bson::Document(document) => document,
-                _ => return Promise::err(capnp::Error::failed("failed to parse json as Bson::Document".to_owned())),
+                _ => cry!(Err(capnp::Error::failed("failed to parse json as Bson::Document".to_owned()))),
             };
 
             //insert document
-            if let Err(e) = self.mongodb_client.db("proddle").collection("results").insert_one(document, None) {
-                return Promise::err(capnp::Error::failed(format!("failed to insert result: {}", e)));
-            }
+            cry!(self.mongodb_client.db("proddle").collection("results").insert_one(document, None));
         }
 
         Promise::ok(())

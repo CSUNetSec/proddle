@@ -1,8 +1,11 @@
+extern crate env_logger;
 extern crate capnp;
 extern crate capnp_rpc;
 #[macro_use]
 extern crate clap;
 extern crate futures;
+#[macro_use]
+extern crate log;
 extern crate proddle;
 extern crate threadpool;
 extern crate time;
@@ -33,10 +36,12 @@ use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
 pub fn main() {
+    env_logger::init().unwrap();
     let yaml = load_yaml!("vantage_args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
     //initialize vantage parameters
+    info!("parsing command line arguments");
     let hostname = matches.value_of("HOSTNAME").unwrap().to_owned();
     let ip_address = matches.value_of("IP_ADDRESS").unwrap().to_owned();
     let measurements_directory = matches.value_of("MEASUREMENTS_DIRECTORY").unwrap().to_owned();
@@ -71,6 +76,8 @@ pub fn main() {
         None => Vec::new(),
     };
 
+    info!("initializing vantage data structures");
+
     //initialize vantage data structures
     let measurements: Arc<RwLock<HashMap<String, Measurement>>> = Arc::new(RwLock::new(HashMap::new()));
     let operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -93,6 +100,8 @@ pub fn main() {
     //create result channels
     let (tx, rx) = std::sync::mpsc::channel();
 
+    info!("service started");
+
     //start recv result channel
     let thread_server_address = server_address.clone();
     std::thread::spawn(move || {
@@ -106,8 +115,9 @@ pub fn main() {
             };
 
             if result_buffer.len() >= result_batch_size && time::now_utc().to_timespec().sec > failure_retry_time {
+                info!("sending {} results to server", result_buffer.len());
                 if let Err(e) = send_results(&mut result_buffer, &thread_server_address) {
-                    println!("failed to send results: {}", e);
+                    error!("failed to send results: {}", e);
                     failure_retry_time = time::now_utc().to_timespec().sec + (60 * 10);
                 };
             }
@@ -184,8 +194,9 @@ pub fn main() {
 
     //start loop to periodically request measurements and operations
     loop {
+        info!("polling server");
         if let Err(e) = poll_server(measurements.clone(), &measurements_directory, operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, server_address) {
-            println!("failed to poll server: {}", e);
+            error!("failed to poll server: {}", e);
         }
 
         std::thread::sleep(std::time::Duration::new(server_poll_interval_seconds, 0))
@@ -206,7 +217,7 @@ fn send_results(result_buffer: &mut Vec<String>, server_address: &str) -> Result
     let network = Box::new(VatNetwork::new(reader, writer, Side::Client, Default::default()));
     let mut rpc_system = RpcSystem::new(network, None);
     let proddle: Client = rpc_system.bootstrap(Side::Server);
-    handle.spawn(rpc_system.map_err(|e| println!("ERROR: {:?}", e)));
+    handle.spawn(rpc_system.map_err(|e| error!("{:?}", e)));
 
     //initialize request
     let mut request = proddle.send_results_request();
@@ -251,7 +262,7 @@ fn poll_server(
     let network = Box::new(VatNetwork::new(reader, writer, Side::Client, Default::default()));
     let mut rpc_system = RpcSystem::new(network, None);
     let proddle: Client = rpc_system.bootstrap(Side::Server);
-    handle.spawn(rpc_system.map_err(|e| println!("ERROR: {:?}", e)));
+    handle.spawn(rpc_system.map_err(|e| error!("{:?}", e)));
 
     //populate get measurements request
     let mut request = proddle.get_measurements_request();
@@ -271,6 +282,7 @@ fn poll_server(
     }
 
     //send get measurements request
+    let mut measurements_added = 0;
     let response = try!(core.run(request.send().promise));
     {
         let result_measurements = try!(try!(response.get()).get_measurements());
@@ -294,8 +306,13 @@ fn poll_server(
 
                 //add to measurements data structure
                 measurements.insert(measurement.name.to_owned(), measurement);
+                measurements_added += 1;
             }
         }
+    }
+
+    if measurements_added > 0 {
+        info!("added {} measurements", measurements_added);
     }
 
     //populate get operations request
@@ -312,6 +329,7 @@ fn poll_server(
     }
 
     //send get operations request
+    let mut operations_added = 0;
     let response = try!(core.run(request.send().promise));
     {
         let result_operation_buckets = try!(try!(response.get()).get_operation_buckets());
@@ -337,12 +355,17 @@ fn poll_server(
 
                 //add operation
                 binary_heap.push(OperationJob::new(operation));
+                operations_added += 1;
             }
 
             //insert new operations into operations map
             operations.insert(result_operation_bucket.get_bucket(), binary_heap);
             operation_bucket_hashes.insert(result_operation_bucket.get_bucket(), hasher.finish());
         }
+    }
+
+    if operations_added > 0 {
+        info!("added {} operations", operations_added);
     }
 
     Ok(())
