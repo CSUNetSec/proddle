@@ -14,6 +14,7 @@ pub struct Operation {
     pub domain: String,
     pub measurement: String,
     pub interval: u32,
+    pub tags: Option<Vec<String>>,
 }
 
 impl Operation {
@@ -38,12 +39,18 @@ impl Operation {
             _ => return Err(Error::Proddle("failed to parse interval as i32".to_owned())),
         };
 
+        let tags: Option<Vec<String>> = match document.get("tags") {
+            Some(&Bson::Array(ref tags)) => Some(tags.iter().map(|x| x.to_string().replace("\"", "")).collect()),
+            _ => return Err(Error::Proddle("failed to parse tags as array".to_owned())),
+        };
+
         Ok(
             Operation {
                 timestamp: timestamp,
                 domain: domain,
                 measurement: measurement,
                 interval: interval,
+                tags: tags,
             }
         )
     }
@@ -58,12 +65,18 @@ impl Operation {
         let measurement = msg.get_measurement().unwrap().to_owned();
         let interval = msg.get_interval();
 
+        let tags = match msg.has_tags() {
+            true => Some(msg.get_tags().unwrap().iter().map(|x| x.unwrap().to_string()).collect()),
+            false => None,
+        };
+
         Ok(
             Operation {
                 timestamp: timestamp,
                 domain: domain,
                 measurement: measurement,
                 interval: interval,
+                tags: tags,
             }
         )
     }

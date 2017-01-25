@@ -26,6 +26,7 @@ struct Operation {
     domain @1 :Text;
     measurement @2 :Text;
     interval @3 :UInt32;
+    tags @4 :List(Text);
 }
 
 struct OperationBucket {

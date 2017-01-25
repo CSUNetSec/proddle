@@ -42,7 +42,7 @@ impl Measurement {
         };
 
         let dependencies: Option<Vec<String>> = match document.get("dependencies") {
-            Some(&Bson::Array(ref dependencies)) => Some(dependencies.iter().map(|x| x.to_string()).collect()),
+            Some(&Bson::Array(ref dependencies)) => Some(dependencies.iter().map(|x| x.to_string().replace("\"", "")).collect()),
             _ => return Err(Error::Proddle("failed to parse dependencies as array".to_owned())),
         };
         

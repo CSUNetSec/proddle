@@ -17,6 +17,7 @@ subcommands:
                     - DEPENDENCY:
                         short: d
                         long: dependency
+                        takes_value: true
                         multiple: true
                         help: Python dependencies of the measurement.
             - delete:
@@ -47,7 +48,14 @@ subcommands:
                         short: i
                         long: interval
                         takes_value: true
+                        default_value: "14400"
                         help: Operation execution interval in seconds.
+                    - TAG:
+                        short: t
+                        long: tag
+                        takes_value: true
+                        multiple: true
+                        help: Comma separated list of operation tags
             - delete:
                 about: Delete an operation(s).
                 args:

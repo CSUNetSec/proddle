@@ -61,6 +61,16 @@ pub fn main() {
         Err(e) => panic!("failed to parse result_batch_size as usize: {}", e),
     };
 
+    let include_tags = match matches.values_of("INCLUDE_TAGS") {
+        Some(include_tags) => include_tags.collect(),
+        None => Vec::new(),
+    };
+
+    let exclude_tags = match matches.values_of("EXCLUDE_TAGS") {
+        Some(exclude_tags) => exclude_tags.collect(),
+        None => Vec::new(),
+    };
+
     //initialize vantage data structures
     let measurements: Arc<RwLock<HashMap<String, Measurement>>> = Arc::new(RwLock::new(HashMap::new()));
     let operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -174,7 +184,7 @@ pub fn main() {
 
     //start loop to periodically request measurements and operations
     loop {
-        if let Err(e) = poll_server(measurements.clone(), &measurements_directory, operations.clone(), operation_bucket_hashes.clone(), server_address) {
+        if let Err(e) = poll_server(measurements.clone(), &measurements_directory, operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, server_address) {
             println!("failed to poll server: {}", e);
         }
 
@@ -225,6 +235,8 @@ fn poll_server(
         measurements_directory: &str,
         operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>>,
         operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>>,
+        include_tags: &Vec<&str>,
+        exclude_tags: &Vec<&str>,
         server_address: &str) -> Result<(), Error> {
     //open stream
     let mut core = try!(Core::new());
@@ -312,8 +324,18 @@ fn poll_server(
             for result_operation in try!(result_operation_bucket.get_operations()).iter() {
                 //add operation to binary heap
                 let operation = try!(Operation::from_capnproto(&result_operation));
-
                 operation.hash(&mut hasher);
+
+                //validate tags
+                if let Some(ref operation_tags) = operation.tags {
+                    if !contains_tags(include_tags, &operation_tags) || contains_tags(exclude_tags, &operation_tags) {
+                        continue;
+                    }
+                } else {
+                    continue;
+                }
+
+                //add operation
                 binary_heap.push(OperationJob::new(operation));
             }
 
@@ -324,6 +346,18 @@ fn poll_server(
     }
 
     Ok(())
+}
+
+fn contains_tags(tags: &Vec<&str>, operation_tags: &Vec<String>) -> bool {
+    for operation_tag in operation_tags {
+        for tag in tags {
+            if operation_tag.eq(*tag) {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /*

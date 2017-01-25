@@ -267,6 +267,13 @@ impl Server for ServerImpl {
                 result_operation.set_domain(&operation.domain);
                 result_operation.set_measurement(&operation.measurement);
                 result_operation.set_interval(operation.interval);
+
+                if let Some(ref tags) = operation.tags {
+                    let mut operation_tags = result_operation.borrow().init_tags(tags.len() as u32);
+                    for (i, tag) in tags.iter().enumerate() {
+                        operation_tags.set(i as u32, tag);
+                    }
+                }
             }
         }
 

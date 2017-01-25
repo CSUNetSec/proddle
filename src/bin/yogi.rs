@@ -93,14 +93,14 @@ fn main() {
         if let Some(matches) = matches.subcommand_matches("add") {
             let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
             let domain = matches.value_of("DOMAIN").unwrap();
-            let interval = match matches.value_of("INTERVAL") {
-                Some(interval) => {
-                    match interval.parse::<i32>() {
-                        Ok(interval) => interval,
-                        Err(e) => panic!("failed to parse interval into integer: {}", e),
-                    }
-                },
-                None => 14400,
+            let interval = match matches.value_of("INTERVAL").unwrap().parse::<i32>() {
+                Ok(interval) => interval,
+                Err(e) => panic!("failed to parse interval into integer: {}", e),
+            };
+
+            let tags: Vec<Bson> = match matches.values_of("TAG") {
+                Some(tags) => tags.map(|x| Bson::String(x.to_owned())).collect(),
+                None => Vec::new(),
             };
 
             //check if measurement exists
@@ -115,7 +115,8 @@ fn main() {
                 "timestamp" => timestamp,
                 "measurement" => measurement_name,
                 "domain" => domain,
-                "interval" => interval
+                "interval" => interval,
+                "tags" => tags
             };
 
             //insert document
