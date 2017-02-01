@@ -271,14 +271,23 @@ impl Server for ServerImpl {
             let json_string = param_result.get_json_string().unwrap();
 
             //parse json string into Bson::Document
-            let json = cry!(Json::from_str(json_string));
+            let json = match Json::from_str(json_string) {
+                Ok(json) => json,
+                Err(e) => {
+                    error!("failed to parse json string '{}' :{}", json_string, e);
+                    continue;
+                },
+            };
+
             let document: bson::Document = match Bson::from_json(&json) {
                 Bson::Document(document) => document,
-                _ => cry!(Err(capnp::Error::failed("failed to parse json as Bson::Document".to_owned()))),
+                _ => cry!(Err(format!("failed to parse json as Bson::Document, {}", json_string))),
             };
 
             //insert document
-            cry!(self.mongodb_client.db("proddle").collection("results").insert_one(document, None));
+            if let Err(e) = self.mongodb_client.db("proddle").collection("results").insert_one(document, None) {
+                error!("{}", e);
+            }
         }
 
         Promise::ok(())
