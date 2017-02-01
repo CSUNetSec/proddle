@@ -41,9 +41,9 @@ pub fn main() {
     let yaml = load_yaml!("args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    //initialize server parameters
+    //initialize bridge parameters
     info!("parsing command line arguments");
-    let listen_socket_address = format!("{}:{}", matches.value_of("SERVER_IP_ADDRESS").unwrap(), matches.value_of("SERVER_PORT").unwrap());
+    let listen_socket_address = format!("{}:{}", matches.value_of("BRIDGE_IP_ADDRESS").unwrap(), matches.value_of("BRIDGE_PORT").unwrap());
     let mongodb_ip_address = matches.value_of("MONGODB_IP_ADDRESS").unwrap();
     let mongodb_port = match matches.value_of("MONGODB_PORT").unwrap().parse::<u16>() {
         Ok(mongodb_port) => mongodb_port,
@@ -67,8 +67,8 @@ pub fn main() {
         Err(e) => panic!("failed to connect to mongodb: {}", e),
     };
 
-    //initialize proddle server
-    info!("initializing server data strucutes");
+    //initialize proddle bridge
+    info!("initializing bridge data strucutes");
     let proddle = ToClient::new(ServerImpl::new(client)).from_server::<capnp_rpc::Server>();
     
     //start rpc loop
@@ -93,7 +93,7 @@ macro_rules! cry {
         Ok(val) => val,
         Err(e) => {
             error!("{}", e);
-            return Promise::err(capnp::Error::failed(String::from("internal server error")));
+            return Promise::err(capnp::Error::failed(String::from("internal error")));
         }
     });
 }
@@ -191,7 +191,7 @@ impl Server for ServerImpl {
         info!("received get_operations request");
         let param_bucket_hashes = pry!(pry!(params.get()).get_bucket_hashes());
 
-        //initialize server side bucket hashes
+        //initialize bridge side bucket hashes
         let mut bucket_hashes = BTreeMap::new();
         let mut operations: BTreeMap<u64, Vec<Operation>> = BTreeMap::new();
         for bucket_hash in param_bucket_hashes.iter() {
@@ -219,11 +219,11 @@ impl Server for ServerImpl {
             vec.push(operation);
         }
 
-        //compare vantage hashes to server hashes
+        //compare vantage hashes to bridge hashes
         for param_bucket_hash in param_bucket_hashes.iter() {
             let bucket_key = param_bucket_hash.get_bucket();
 
-            //if vantage hash equals server hash remove vector of operations from operations
+            //if vantage hash equals bridge hash remove vector of operations from operations
             let bucket_hash = bucket_hashes.get(&bucket_key).unwrap().finish();
             if bucket_hash == param_bucket_hash.get_hash() {
                 operations.remove(&bucket_key);

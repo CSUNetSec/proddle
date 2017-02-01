@@ -33,24 +33,24 @@ args:
         takes_value: true
         default_value: "16"
         help: Number of threads for operation execution.
-    - SERVER_IP_ADDRESS:
+    - BRIDGE_IP_ADDRESS:
         short: i
-        long: server_ip_address
+        long: bridge_ip_address
         takes_value: true
         default_value: 127.0.0.1
-        help: Ip address for proddle server.
-    - SERVER_PORT:
+        help: Ip address for proddle bridge.
+    - BRIDGE_PORT:
         short: p
-        long: server_port
+        long: bridge_port
         takes_value: true
         default_value: "12289"
-        help: Port for proddle server.
-    - SERVER_POLL_INTERVAL_SECONDS:
-        short: P
-        long: poll_interval_seconds
+        help: Port for proddle bridge.
+    - BRIDGE_UPDATE_INTERVAL_SECONDS:
+        short: u
+        long: update_interval_seconds
         takes_value: true
         default_value: "1440"
-        help: Seconds interval to poll server for updates.
+        help: Seconds interval to poll bridge for updates.
     - SEND_RESULTS_INTERVAL_SECONDS:
         short: s
         long: send_results_interval_seconds

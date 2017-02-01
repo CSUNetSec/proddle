@@ -15,15 +15,15 @@ args:
         takes_value: true
         default_value: "27017"
         help: Port for mongodb instance.
-    - SERVER_IP_ADDRESS:
-        short: s
+    - BRIDGE_IP_ADDRESS:
+        short: I
         long: ip_address
         takes_value: true
         default_value: 0.0.0.0
-        help: Ip address for proddle server.
-    - SERVER_PORT:
-        short: o
+        help: Ip address for proddle bridge.
+    - BRIDGE_PORT:
+        short: P
         long: port
         takes_value: true
         default_value: "12289"
-        help: Port for proddle server.
+        help: Port for proddle bridge.

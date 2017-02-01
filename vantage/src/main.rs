@@ -57,10 +57,10 @@ pub fn main() {
         Err(e) => panic!("failed to parse thread_count as usize: {}", e),
     };
 
-    let server_address = &format!("{}:{}", matches.value_of("SERVER_IP_ADDRESS").unwrap(), matches.value_of("SERVER_PORT").unwrap());
-    let server_poll_interval_seconds = match matches.value_of("SERVER_POLL_INTERVAL_SECONDS").unwrap().parse::<u64>() {
-        Ok(server_poll_interval_seconds) => server_poll_interval_seconds,
-        Err(e) => panic!("failed to parse server_poll_interval_seconds as u64: {}", e),
+    let bridge_address = &format!("{}:{}", matches.value_of("BRIDGE_IP_ADDRESS").unwrap(), matches.value_of("BRIDGE_PORT").unwrap());
+    let bridge_update_interval_seconds = match matches.value_of("BRIDGE_UPDATE_INTERVAL_SECONDS").unwrap().parse::<u64>() {
+        Ok(bridge_update_interval_seconds) => bridge_update_interval_seconds,
+        Err(e) => panic!("failed to parse bridge_update_interval_seconds as u64: {}", e),
     };
 
     let send_results_interval_seconds = match matches.value_of("SEND_RESULTS_INTERVAL_SECONDS").unwrap().parse::<u32>() {
@@ -105,7 +105,7 @@ pub fn main() {
     info!("service started");
 
     //start recv result channel
-    let thread_server_address = server_address.clone();
+    let thread_bridge_address = bridge_address.clone();
     std::thread::spawn(move || {
         let mut result_buffer: Vec<String> = Vec::new();
         let tick = chan::tick_ms(send_results_interval_seconds * 1000);
@@ -120,8 +120,8 @@ pub fn main() {
                 },
                 tick.recv() => {
                     if result_buffer.len() > 0 {
-                        info!("sending {} results to server", result_buffer.len());
-                        if let Err(e) = send_results(&mut result_buffer, &thread_server_address) {
+                        info!("sending {} results to bridge", result_buffer.len());
+                        if let Err(e) = send_results(&mut result_buffer, &thread_bridge_address) {
                             error!("failed to send results: {}", e);
                         };
                     }
@@ -198,21 +198,21 @@ pub fn main() {
 
     //start loop to periodically request measurements and operations
     loop {
-        info!("polling server");
-        if let Err(e) = poll_server(measurements.clone(), &measurements_directory, operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, server_address) {
-            error!("failed to poll server: {}", e);
+        info!("polling bridge");
+        if let Err(e) = poll_bridge(measurements.clone(), &measurements_directory, operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, bridge_address) {
+            error!("failed to poll bridge: {}", e);
         }
 
-        std::thread::sleep(std::time::Duration::new(server_poll_interval_seconds, 0))
+        std::thread::sleep(std::time::Duration::new(bridge_update_interval_seconds, 0))
     }
 }
 
-fn send_results(result_buffer: &mut Vec<String>, server_address: &str) -> Result<(), Error> {
+fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Result<(), Error> {
     //open stream
     let mut core = try!(Core::new());
     let handle = core.handle();
                         
-    let socket_addr = try!(SocketAddr::from_str(server_address));
+    let socket_addr = try!(SocketAddr::from_str(bridge_address));
     let stream = try!(core.run(TcpStream::connect(&socket_addr, &handle)));
 
     try!(stream.set_nodelay(true));
@@ -245,19 +245,19 @@ fn send_results(result_buffer: &mut Vec<String>, server_address: &str) -> Result
     Ok(())
 }
 
-fn poll_server(
+fn poll_bridge(
         measurements: Arc<RwLock<HashMap<String, Measurement>>>,
         measurements_directory: &str,
         operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>>,
         operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>>,
         include_tags: &Vec<&str>,
         exclude_tags: &Vec<&str>,
-        server_address: &str) -> Result<(), Error> {
+        bridge_address: &str) -> Result<(), Error> {
     //open stream
     let mut core = try!(Core::new());
     let handle = core.handle();
                         
-    let socket_addr = try!(SocketAddr::from_str(server_address));
+    let socket_addr = try!(SocketAddr::from_str(bridge_address));
     let stream = try!(core.run(TcpStream::connect(&socket_addr, &handle)));
 
     try!(stream.set_nodelay(true));
