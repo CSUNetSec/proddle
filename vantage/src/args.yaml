@@ -55,7 +55,7 @@ args:
         short: s
         long: send_results_interval_seconds
         takes_value: true
-        default_value: "60"
+        default_value: "300"
         help: Seconds interval to attempt to send results.
     - INCLUDE_TAGS:
         short: t
