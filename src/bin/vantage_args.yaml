@@ -51,12 +51,12 @@ args:
         takes_value: true
         default_value: "1440"
         help: Seconds interval to poll server for updates.
-    - RESULT_BATCH_SIZE:
-        short: r
-        long: result_batch_size
+    - SEND_RESULTS_INTERVAL_SECONDS:
+        short: s
+        long: send_results_interval_seconds
         takes_value: true
-        default_value: "100"
-        help: Size of batch for sending results to server.
+        default_value: "60"
+        help: Seconds interval to attempt to send results.
     - INCLUDE_TAGS:
         short: t
         long: tag

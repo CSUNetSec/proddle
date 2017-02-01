@@ -2,6 +2,8 @@ extern crate env_logger;
 extern crate capnp;
 extern crate capnp_rpc;
 #[macro_use]
+extern crate chan;
+#[macro_use]
 extern crate clap;
 extern crate futures;
 #[macro_use]
@@ -61,9 +63,9 @@ pub fn main() {
         Err(e) => panic!("failed to parse server_poll_interval_seconds as u64: {}", e),
     };
 
-    let result_batch_size = match matches.value_of("RESULT_BATCH_SIZE").unwrap().parse::<usize>() {
-        Ok(result_batch_size) => result_batch_size,
-        Err(e) => panic!("failed to parse result_batch_size as usize: {}", e),
+    let send_results_interval_seconds = match matches.value_of("SEND_RESULTS_INTERVAL_SECONDS").unwrap().parse::<u32>() {
+        Ok(send_results_interval_seconds) => send_results_interval_seconds,
+        Err(e) => panic!("failed to parse send_results_interval_seconds as u32: {}", e),
     };
 
     let include_tags = match matches.values_of("INCLUDE_TAGS") {
@@ -98,7 +100,7 @@ pub fn main() {
     }
 
     //create result channels
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = chan::sync(0);
 
     info!("service started");
 
@@ -106,20 +108,24 @@ pub fn main() {
     let thread_server_address = server_address.clone();
     std::thread::spawn(move || {
         let mut result_buffer: Vec<String> = Vec::new();
-        let mut failure_retry_time = 0;
+        let tick = chan::tick_ms(send_results_interval_seconds * 1000);
 
         loop {
-            match rx.recv() {
-                Ok(result) => result_buffer.push(result),
-                Err(e) => panic!("failed to retrieve result from result channel: {}", e),
-            };
-
-            if result_buffer.len() >= result_batch_size && time::now_utc().to_timespec().sec > failure_retry_time {
-                info!("sending {} results to server", result_buffer.len());
-                if let Err(e) = send_results(&mut result_buffer, &thread_server_address) {
-                    error!("failed to send results: {}", e);
-                    failure_retry_time = time::now_utc().to_timespec().sec + (60 * 10);
-                };
+            chan_select! {
+                rx.recv() -> result => {
+                    match result {
+                        Some(result) => result_buffer.push(result),
+                        None => error!("failed to retrieve result from channel"),
+                    }
+                },
+                tick.recv() => {
+                    if result_buffer.len() > 0 {
+                        info!("sending {} results to server", result_buffer.len());
+                        if let Err(e) = send_results(&mut result_buffer, &thread_server_address) {
+                            error!("failed to send results: {}", e);
+                        };
+                    }
+                },
             }
         }
     });
@@ -177,9 +183,7 @@ pub fn main() {
                                 result.push_str("}");
 
                                 //send result string over result channel
-                                if let Err(e) = pool_tx.send(result) {
-                                    panic!("failed to send result over result channel: {}", e);
-                                }
+                                pool_tx.send(result);
                             });
                         } else {
                             break;
