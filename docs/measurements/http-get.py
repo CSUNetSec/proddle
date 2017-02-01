@@ -45,16 +45,14 @@ def main():
             return
         except:
             e = sys.exc_info()[0] #catch all errors
-            errors.append(c.errstr())
+            errors.append('"' + c.errstr() + '"')
 
         #close curl handle
         c.close()
 
     print('{', end='')
     print('"Error":true,', end='')
-    print('"ErrorMessages":[', end='')
-    for error in errors:
-        print(error, end='')
+    print('"ErrorMessages":[%s' % ','.join(errors), end='')
     print(']}', end='', flush=True)
 
 if __name__ == '__main__':
