@@ -17,7 +17,7 @@ use std::fs::File;
 use std::io::Read;
 
 fn main() {
-    let yaml = load_yaml!("yogi_args.yaml");
+    let yaml = load_yaml!("args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
     //connect to mongodb

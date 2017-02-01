@@ -38,7 +38,7 @@ use std::str::FromStr;
 
 pub fn main() {
     env_logger::init().unwrap();
-    let yaml = load_yaml!("proddle_args.yaml");
+    let yaml = load_yaml!("args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
     //initialize server parameters

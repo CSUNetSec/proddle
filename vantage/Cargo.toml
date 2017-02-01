@@ -1,0 +1,17 @@
+[package]
+name = "vantage"
+version = "0.1.0"
+authors = ["Dan Rammer <hamersaw@bushpath.com>"]
+
+[dependencies]
+env_logger = "0.3"
+capnp = "0.8"
+capnp-rpc = "0.8"
+chan = "0.1"
+clap = {version = "2.19", features = ["yaml"]}
+futures = "0.1"
+log = "0.3"
+proddle = {path = "../"}
+threadpool = "1.3"
+time = "0.1"
+tokio-core = "0.1"

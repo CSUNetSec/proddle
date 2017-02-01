@@ -17,5 +17,4 @@ env RUST_LOG=info ./vantage -H hostname.example.com -I 1.2.3.4
 - validate hostname and ip address on vantage
 - validate module scripts before they're uploaded
 - use pip3 to install dependencies of modules
-- ease addition of mongodb instances
 - create docker image

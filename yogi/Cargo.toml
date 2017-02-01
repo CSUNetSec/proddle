@@ -1,0 +1,13 @@
+[package]
+name = "yogi"
+version = "0.1.0"
+authors = ["Dan Rammer <hamersaw@bushpath.com>"]
+
+[dependencies]
+bson = "0.3"
+clap = {version = "2.19", features = ["yaml"]}
+mongodb = "0.1"
+proddle = {path = "../"}
+rand = "0.3"
+rustc-serialize = "0.3"
+time = "0.1"

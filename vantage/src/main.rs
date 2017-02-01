@@ -39,7 +39,7 @@ use std::sync::{Arc, RwLock};
 
 pub fn main() {
     env_logger::init().unwrap();
-    let yaml = load_yaml!("vantage_args.yaml");
+    let yaml = load_yaml!("args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
     //initialize vantage parameters
