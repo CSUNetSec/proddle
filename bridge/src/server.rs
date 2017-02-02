@@ -1,18 +1,14 @@
-extern crate bson;
 extern crate capnp;
-extern crate capnp_rpc;
-extern crate mongodb;
 extern crate proddle;
-extern crate rustc_serialize;
 
-use self::bson::Bson;
+use bson::{Bson, Document};
 use capnp::capability::Promise;
 use mongodb::{Client, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
-use self::proddle::{Measurement, Operation};
-use self::proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
-use self::proddle::proddle_capnp::proddle::Server;
-use self::rustc_serialize::json::Json;
+use proddle::{Measurement, Operation};
+use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
+use proddle::proddle_capnp::proddle::Server;
+use rustc_serialize::json::Json;
 
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::{DefaultHasher, Entry};
@@ -227,7 +223,7 @@ impl Server for ServerImpl {
                 },
             };
 
-            let document: bson::Document = match Bson::from_json(&json) {
+            let document: Document = match Bson::from_json(&json) {
                 Bson::Document(document) => document,
                 _ => cry!(Err(format!("failed to parse json as Bson::Document, {}", json_string))),
             };

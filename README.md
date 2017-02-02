@@ -13,7 +13,7 @@ env RUST_LOG=info ./bridge
 env RUST_LOG=info ./vantage -H hostname.example.com -I 1.2.3.4
 
 ##TODO
-- mass code refactor since it's now in separate projects (400 line files is unacceptable)
+- refactor vantage to use separate functions to get measurements and operations
 - fix error handling in measurement/operation
 - add timestamp to info logging
 - validate hostname and ip address on vantage

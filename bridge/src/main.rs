@@ -1,3 +1,4 @@
+extern crate bson;
 extern crate env_logger;
 extern crate capnp;
 #[macro_use]
@@ -10,6 +11,7 @@ extern crate log;
 extern crate mongodb;
 extern crate proddle;
 extern crate tokio_core;
+extern crate rustc_serialize;
 
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
