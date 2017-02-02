@@ -216,9 +216,15 @@ pub fn main() {
 
     //start loop to periodically request measurements and operations
     loop {
-        info!("polling bridge");
-        if let Err(e) = client::poll_bridge(measurements.clone(), &measurements_directory, operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, bridge_address) {
-            error!("failed to poll bridge: {}", e);
+        info!("retrieving updates from bridge");
+        match client::update_measurements(measurements.clone(), &measurements_directory, bridge_address) {
+            Ok(measurements_added) => info!("added {} measurements", measurements_added),
+            Err(e) => error!("{}", e),
+        }
+
+        match client::update_operations(operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, bridge_address) {
+            Ok(operations_added) => info!("added {} operations", operations_added),
+            Err(e) => error!("{}", e),
         }
 
         std::thread::sleep(std::time::Duration::new(bridge_update_interval_seconds, 0))

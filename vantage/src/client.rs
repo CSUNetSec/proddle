@@ -21,8 +21,7 @@ use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
 
-pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Result<(), Error> {
-    //open stream
+fn open_stream(bridge_address: &str) -> Result<(Core, Client), Error> {
     let mut core = try!(Core::new());
     let handle = core.handle();
                         
@@ -36,6 +35,13 @@ pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Re
     let mut rpc_system = RpcSystem::new(network, None);
     let proddle: Client = rpc_system.bootstrap(Side::Server);
     handle.spawn(rpc_system.map_err(|e| error!("{:?}", e)));
+
+    Ok((core, proddle))
+}
+
+pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Result<(), Error> {
+    //open stream
+    let (mut core, proddle) = try!(open_stream(bridge_address));
 
     //initialize request
     let mut request = proddle.send_results_request();
@@ -59,28 +65,9 @@ pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Re
     Ok(())
 }
 
-pub fn poll_bridge(
-        measurements: Arc<RwLock<HashMap<String, Measurement>>>,
-        measurements_directory: &str,
-        operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>>,
-        operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>>,
-        include_tags: &HashMap<&str, i64>,
-        exclude_tags: &Vec<&str>,
-        bridge_address: &str) -> Result<(), Error> {
+pub fn update_measurements(measurements: Arc<RwLock<HashMap<String, Measurement>>>, measurements_directory: &str, bridge_address: &str) -> Result<i32, Error> {
     //open stream
-    let mut core = try!(Core::new());
-    let handle = core.handle();
-                        
-    let socket_addr = try!(SocketAddr::from_str(bridge_address));
-    let stream = try!(core.run(TcpStream::connect(&socket_addr, &handle)));
-
-    try!(stream.set_nodelay(true));
-    let (reader, writer) = stream.split();
-
-    let network = Box::new(VatNetwork::new(reader, writer, Side::Client, Default::default()));
-    let mut rpc_system = RpcSystem::new(network, None);
-    let proddle: Client = rpc_system.bootstrap(Side::Server);
-    handle.spawn(rpc_system.map_err(|e| error!("{:?}", e)));
+    let (mut core, proddle) = try!(open_stream(bridge_address));
 
     //populate get measurements request
     let mut request = proddle.get_measurements_request();
@@ -129,9 +116,16 @@ pub fn poll_bridge(
         }
     }
 
-    if measurements_added > 0 {
-        info!("added {} measurements", measurements_added);
-    }
+    Ok(measurements_added)
+}
+
+pub fn update_operations(operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>>,
+        operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>>,
+        include_tags: &HashMap<&str, i64>,
+        exclude_tags: &Vec<&str>,
+        bridge_address: &str) -> Result<i32, Error> {
+    //open stream
+    let (mut core, proddle) = try!(open_stream(bridge_address));
 
     //populate get operations request
     let mut request = proddle.get_operations_request();
@@ -205,9 +199,5 @@ pub fn poll_bridge(
         }
     }
 
-    if operations_added > 0 {
-        info!("added {} operations", operations_added);
-    }
-
-    Ok(())
+    Ok(operations_added)
 }
