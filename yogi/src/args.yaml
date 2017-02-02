@@ -14,6 +14,12 @@ subcommands:
                     - MEASUREMENT_NAME:
                         required: true
                         help: Name of measurement.
+                    - PARAMETER:
+                        short: p
+                        long: parameter
+                        takes_value: true
+                        multiple: true
+                        help: Python script parameter, ex. param|help.
                     - DEPENDENCY:
                         short: d
                         long: dependency
@@ -44,12 +50,21 @@ subcommands:
                     - DOMAIN:
                         required: true
                         help: Domain name.
+                    - URL:
+                        required: true
+                        help: Url name.
                     - INTERVAL:
                         short: i
                         long: interval
                         takes_value: true
                         default_value: "14400"
                         help: Operation execution interval in seconds.
+                    - PARAMETER:
+                        short: p
+                        long: parameter
+                        takes_value: true
+                        multiple: true
+                        help: Python script parameter, ex. param|value.
                     - TAG:
                         short: t
                         long: tag

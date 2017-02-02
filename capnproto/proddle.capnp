@@ -11,22 +11,28 @@ struct BucketHash {
     hash @1 :UInt64;
 }
 
-# Measurement Definition
+struct Parameter {
+    name @0 :Text;
+    value @1 :Text;
+}
+
 struct Measurement {
     timestamp @0 :UInt64;
     name @1 :Text;
     version @2 :UInt16;
-    dependencies @3 :List(Text);
-    content @4 :Text;
+    parameters @3: List(Parameter);
+    dependencies @4 :List(Text);
+    content @5 :Text;
 }
 
-# Operation Definition
 struct Operation {
     timestamp @0 :UInt64;
-    domain @1 :Text;
-    measurement @2 :Text;
-    interval @3 :UInt32;
-    tags @4 :List(Text);
+    measurement @1 :Text;
+    domain @2 :Text;
+    url @3 :Text;
+    parameters @4 :List(Parameter);
+    interval @5 :UInt32;
+    tags @6 :List(Text);
 }
 
 struct OperationBucket {
@@ -34,7 +40,6 @@ struct OperationBucket {
     operations @1 :List(Operation);
 }
 
-# Result Definition
 struct Result {
     jsonString @0: Text;
 }

@@ -18,3 +18,13 @@ env RUST_LOG=info ./vantage -H hostname.example.com -I 1.2.3.4
 - validate module scripts before they're uploaded
 - use pip3 to install dependencies of modules
 - create docker image
+
+-fix error handling in measurement
+-add String::from() instead of .to_owned() in measurement
+
+-fix error handling in operation
+-change hash function in operation
+
+-change result json fields to lowercase
+
+-remove interval in operation (have vantage supply interval in tag)

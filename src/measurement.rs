@@ -6,20 +6,24 @@ use bson::ordered::OrderedDocument;
 use error::Error;
 use proddle_capnp;
 
+use std::collections::HashMap;
+
 pub struct Measurement {
     pub timestamp: Option<u64>,
     pub name: String,
     pub version: u16,
+    pub parameters: Option<HashMap<String, String>>,
     pub dependencies: Option<Vec<String>>,
     pub content: Option<String>,
 }
 
 impl Measurement {
-    pub fn new(timestamp: Option<u64>, name: String, version: u16, dependencies: Option<Vec<String>>, content: Option<String>) -> Measurement {
+    pub fn new(timestamp: Option<u64>, name: String, version: u16, parameters: Option<HashMap<String, String>>, dependencies: Option<Vec<String>>, content: Option<String>) -> Measurement {
         Measurement {
             timestamp: timestamp,
             name: name,
             version: version,
+            parameters: parameters,
             dependencies: dependencies,
             content: content,
         }
@@ -41,6 +45,33 @@ impl Measurement {
             _ => return Err(Error::Proddle("failed to parse version as i32".to_owned())),
         };
 
+        let parameters: Option<HashMap<String, String>> = match document.get("parameters") {
+            Some(&Bson::Array(ref parameters)) => {
+                let mut hash_map = HashMap::new();
+                for parameter in parameters.iter() {
+                    let document = match parameter {
+                        &Bson::Document(ref document) => document,
+                        _ => return Err(Error::Proddle("failed to parameter name as bson document".to_owned())),
+                    };
+
+                    let name = match document.get("name") {
+                        Some(&Bson::String(ref name)) => name,
+                        _ => return Err(Error::Proddle("failed to parse parameter name as string".to_owned())),
+                    };
+
+                    let value = match document.get("value") {
+                        Some(&Bson::String(ref value)) => value,
+                        _ => return Err(Error::Proddle("mongodb: failed to parse parameter value as string".to_owned())),
+                    };
+
+                    hash_map.insert(name.to_owned(), value.to_owned());
+                }
+
+                Some(hash_map)
+            },
+            _ => return Err(Error::Proddle("failed to parse parameters as array".to_owned())),
+        };
+
         let dependencies: Option<Vec<String>> = match document.get("dependencies") {
             Some(&Bson::Array(ref dependencies)) => Some(dependencies.iter().map(|x| x.to_string().replace("\"", "")).collect()),
             _ => return Err(Error::Proddle("failed to parse dependencies as array".to_owned())),
@@ -56,6 +87,7 @@ impl Measurement {
                 timestamp: timestamp,
                 name: measurement_name,
                 version: version,
+                parameters:  parameters,
                 dependencies: dependencies,
                 content: content,
             }
@@ -70,6 +102,28 @@ impl Measurement {
 
         let measurement_name = msg.get_name().unwrap().to_owned();
         let version = msg.get_version();
+
+        let parameters = match msg.has_parameters() {
+            true => {
+                let mut hash_map = HashMap::new();
+                for parameter in msg.get_parameters().unwrap().iter() {
+                    let name = match parameter.get_name() {
+                        Ok(name) => name,
+                        Err(_) => return Err(Error::Proddle("failed to retrieve name from parameter".to_owned())),
+                    };
+
+                    let value = match parameter.get_value() {
+                        Ok(value) => value,
+                        Err(_) => return Err(Error::Proddle("failed to retrieve value from parameter".to_owned())),
+                    };
+
+                    hash_map.insert(name.to_owned(), value.to_owned());
+                }
+
+                Some(hash_map)
+            },
+            false  => None,
+        };
 
         let dependencies = match msg.has_dependencies() {
             true => Some(msg.get_dependencies().unwrap().iter().map(|x| x.unwrap().to_string()).collect()),
@@ -86,6 +140,7 @@ impl Measurement {
                 timestamp: timestamp,
                 name: measurement_name,
                 version: version,
+                parameters: parameters,
                 dependencies: dependencies,
                 content: content,
             }

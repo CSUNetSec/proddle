@@ -155,7 +155,7 @@ impl Server for ServerImpl {
                 }
             } else if let Entry::Vacant(vacant_entry) = entry {
                 //if mongodb map doens't contain remove from vantage
-                vacant_entry.insert(Measurement::new(None, measurement_name.to_owned(), 0, None, None));
+                vacant_entry.insert(Measurement::new(None, measurement_name.to_owned(), 0, None, None, None));
             }
         }
 
@@ -171,6 +171,15 @@ impl Server for ServerImpl {
 
             measurement.set_name(&entry.name);
             measurement.set_version(entry.version);
+
+            if let Some(ref parameters) = entry.parameters {
+                let mut measurement_parameters = measurement.borrow().init_parameters(parameters.len() as u32);
+                for (i, (name, value)) in parameters.iter().enumerate() {
+                    let mut measurement_parameter = measurement_parameters.borrow().get(i as u32);
+                    measurement_parameter.set_name(name);
+                    measurement_parameter.set_value(value);
+                }
+            }
 
             if let Some(ref dependencies) = entry.dependencies {
                 let mut measurement_dependencies = measurement.borrow().init_dependencies(dependencies.len() as u32);
@@ -246,8 +255,19 @@ impl Server for ServerImpl {
                     result_operation.set_timestamp(timestamp);
                 }
 
-                result_operation.set_domain(&operation.domain);
                 result_operation.set_measurement(&operation.measurement);
+                result_operation.set_domain(&operation.domain);
+                result_operation.set_url(&operation.url);
+
+                if let Some(ref parameters) = operation.parameters {
+                    let mut operation_parameters = result_operation.borrow().init_parameters(parameters.len() as u32);
+                    for (i, (name, value)) in parameters.iter().enumerate() {
+                        let mut operation_parameter = operation_parameters.borrow().get(i as u32);
+                        operation_parameter.set_name(name);
+                        operation_parameter.set_value(value);
+                    }
+                }
+
                 result_operation.set_interval(operation.interval);
 
                 if let Some(ref tags) = operation.tags {

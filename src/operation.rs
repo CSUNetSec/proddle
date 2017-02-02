@@ -6,13 +6,16 @@ use bson::ordered::OrderedDocument;
 use error::Error;
 use proddle_capnp;
 
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 
 #[derive(Clone)]
 pub struct Operation {
     pub timestamp: Option<u64>,
-    pub domain: String,
     pub measurement: String,
+    pub domain: String,
+    pub url: String,
+    pub parameters: Option<HashMap<String, String>>,
     pub interval: u32,
     pub tags: Option<Vec<String>>,
 }
@@ -24,14 +27,46 @@ impl Operation {
             _ => return Err(Error::Proddle("failed to parse timestamp as i64".to_owned())),
         };
 
-        let domain = match document.get("domain") {
-            Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err(Error::Proddle("failed to domain as string".to_owned())),
-        };
-
         let measurement = match document.get("measurement") {
             Some(&Bson::String(ref name)) => name.to_owned(),
             _ => return Err(Error::Proddle("failed to parse measurement name as string".to_owned())),
+        };
+
+        let domain = match document.get("domain") {
+            Some(&Bson::String(ref domain)) => domain.to_owned(),
+            _ => return Err(Error::Proddle("failed to domain as string".to_owned())),
+        };
+
+        let url = match document.get("url") {
+            Some(&Bson::String(ref url)) => url.to_owned(),
+            _ => return Err(Error::Proddle("failed to url as string".to_owned())),
+        };
+
+        let parameters: Option<HashMap<String, String>> = match document.get("parameters") {
+            Some(&Bson::Array(ref parameters)) => {
+                let mut hash_map = HashMap::new();
+                for parameter in parameters.iter() {
+                    let document = match parameter {
+                        &Bson::Document(ref document) => document,
+                        _ => return Err(Error::Proddle("failed to parameter name as bson document".to_owned())),
+                    };
+
+                    let name = match document.get("name") {
+                        Some(&Bson::String(ref name)) => name,
+                        _ => return Err(Error::Proddle("failed to parse parameter name as string".to_owned())),
+                    };
+
+                    let value = match document.get("value") {
+                        Some(&Bson::String(ref value)) => value,
+                        _ => return Err(Error::Proddle("operation: failed to parse parameter value as string".to_owned())),
+                    };
+
+                    hash_map.insert(name.to_owned(), value.to_owned());
+                }
+
+                Some(hash_map)
+            },
+            _ => return Err(Error::Proddle("failed to parse parameters as array".to_owned())),
         };
 
         let interval = match document.get("interval") {
@@ -47,8 +82,10 @@ impl Operation {
         Ok(
             Operation {
                 timestamp: timestamp,
-                domain: domain,
                 measurement: measurement,
+                domain: domain,
+                url: url,
+                parameters: parameters,
                 interval: interval,
                 tags: tags,
             }
@@ -61,8 +98,31 @@ impl Operation {
             _ => Some(msg.get_timestamp()),
         };
 
-        let domain = msg.get_domain().unwrap().to_owned();
         let measurement = msg.get_measurement().unwrap().to_owned();
+        let domain = msg.get_domain().unwrap().to_owned();
+        let url = msg.get_url().unwrap().to_owned();
+        let parameters = match msg.has_parameters() {
+            true => {
+                let mut hash_map = HashMap::new();
+                for parameter in msg.get_parameters().unwrap().iter() {
+                    let name = match parameter.get_name() {
+                        Ok(name) => name,
+                        Err(_) => return Err(Error::Proddle("failed to retrieve name from parameter".to_owned())),
+                    };
+
+                    let value = match parameter.get_value() {
+                        Ok(value) => value,
+                        Err(_) => return Err(Error::Proddle("failed to retrieve value from parameter".to_owned())),
+                    };
+
+                    hash_map.insert(name.to_owned(), value.to_owned());
+                }
+
+                Some(hash_map)
+            },
+            false  => None,
+        };
+
         let interval = msg.get_interval();
 
         let tags = match msg.has_tags() {
@@ -73,8 +133,10 @@ impl Operation {
         Ok(
             Operation {
                 timestamp: timestamp,
-                domain: domain,
                 measurement: measurement,
+                domain: domain,
+                url: url,
+                parameters: parameters,
                 interval: interval,
                 tags: tags,
             }

@@ -30,6 +30,28 @@ fn main() {
         if let Some(matches) = matches.subcommand_matches("add") {
             let file = matches.value_of("FILE").unwrap();
             let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
+            let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
+                Some(parameters) => {
+                    parameters.map(
+                            |x| {
+                                let mut split_values = x.split("|");
+                                let name = match split_values.nth(0) {
+                                    Some(name) => name.to_owned(),
+                                    None => panic!("failed to parse name of parameter"),
+                                };
+
+                                let value = match split_values.nth(0) {
+                                    Some(value) => value.to_owned(),
+                                    None => panic!("failed to parse value of parameter '{}'", name),
+                                };
+
+                                Bson::Document(doc! {"name" => name, "value" => value})
+                            }
+                        ).collect()
+                },
+                None => Vec::new(),
+            };
+
             let dependencies: Vec<Bson> = match matches.values_of("DEPENDENCY") {
                 Some(dependencies) => dependencies.map(|x| Bson::String(x.to_owned())).collect(),
                 None => Vec::new(),
@@ -45,7 +67,7 @@ fn main() {
                 _ => 1,
             };
 
-            //read file into compressed binary buffer
+            //read file into string buffer
             let mut file = match File::open(file) {
                 Ok(file) => file,
                 Err(e) => panic!("failed to open file : {}", e),
@@ -62,6 +84,7 @@ fn main() {
                 "timestamp" => timestamp,
                 "name" => measurement_name,
                 "version" => version,
+                "parameters" => parameters,
                 "dependencies" => dependencies,
                 "content" => buffer
             };
@@ -93,6 +116,29 @@ fn main() {
         if let Some(matches) = matches.subcommand_matches("add") {
             let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
             let domain = matches.value_of("DOMAIN").unwrap();
+            let url = matches.value_of("URL").unwrap();
+            let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
+                Some(parameters) => {
+                    parameters.map(
+                            |x| {
+                                let mut split_values = x.split("|");
+                                let name = match split_values.nth(0) {
+                                    Some(name) => name.to_owned(),
+                                    None => panic!("failed to parse name of parameter"),
+                                };
+
+                                let value = match split_values.nth(0) {
+                                    Some(value) => value.to_owned(),
+                                    None => panic!("failed to parse value of parameter '{}'", name),
+                                };
+
+                                Bson::Document(doc! {"name" => name, "value" => value})
+                            }
+                        ).collect()
+                },
+                None => Vec::new(),
+            };
+
             let interval = match matches.value_of("INTERVAL").unwrap().parse::<i32>() {
                 Ok(interval) => interval,
                 Err(e) => panic!("failed to parse interval into integer: {}", e),
@@ -115,6 +161,8 @@ fn main() {
                 "timestamp" => timestamp,
                 "measurement" => measurement_name,
                 "domain" => domain,
+                "url" => url,
+                "parameters" => parameters,
                 "interval" => interval,
                 "tags" => tags
             };
