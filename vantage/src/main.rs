@@ -69,8 +69,31 @@ pub fn main() {
     };
 
     let include_tags = match matches.values_of("INCLUDE_TAGS") {
-        Some(include_tags) => include_tags.collect(),
-        None => Vec::new(),
+        Some(include_tags) => {
+            let mut hash_map = HashMap::new();
+            for include_tag in include_tags {
+                let mut split_values = include_tag.split("|");
+                let tag = match split_values.nth(0) {
+                    Some(tag) => tag,
+                    None => panic!("failed to collect include tag name"),
+                };
+
+                let interval = match split_values.nth(0) {
+                    Some(interval) => {
+                        match interval.parse::<i64>() {
+                            Ok(interval) => interval,
+                            Err(e) => panic!("failed to parse include tag interval as u32: {}", e),
+                        }
+                    },
+                    None => panic!("failed to collect include tag interval"),
+                };
+
+                hash_map.insert(tag, interval);
+            }
+
+            hash_map
+        },
+        None => HashMap::new(),
     };
 
     let exclude_tags = match matches.values_of("EXCLUDE_TAGS") {
@@ -153,7 +176,7 @@ pub fn main() {
                         if execution_time < now {
                             let mut operation_job = operation_jobs.pop().unwrap();
                             let pool_operation_job = operation_job.clone();
-                            operation_job.execution_time += operation_job.operation.interval as i64;
+                            operation_job.execution_time += operation_job.interval;
                             operation_jobs.push(operation_job);
 
                             //add job to thread pool
@@ -259,7 +282,7 @@ fn poll_bridge(
         measurements_directory: &str,
         operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>>,
         operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>>,
-        include_tags: &Vec<&str>,
+        include_tags: &HashMap<&str, i64>,
         exclude_tags: &Vec<&str>,
         bridge_address: &str) -> Result<(), Error> {
     //open stream
@@ -358,16 +381,39 @@ fn poll_bridge(
                 operation.hash(&mut hasher);
 
                 //validate tags
+                let mut operation_interval = i64::max_value();
                 if let Some(ref operation_tags) = operation.tags {
-                    if !contains_tags(include_tags, &operation_tags) || contains_tags(exclude_tags, &operation_tags) {
-                        continue;
+                    //check if tag is in exclude tags
+                    let mut found = false;
+                    for operation_tag in operation_tags {
+                        for exclude_tag in exclude_tags {
+                            if operation_tag.eq(*exclude_tag) {
+                                found = true;
+                            }
+                        }
                     }
-                } else {
+
+                    if found {
+                        continue
+                    }
+
+                    //determine interval
+                    for operation_tag in operation_tags {
+                        for (include_tag, interval) in include_tags {
+                            if operation_tag.eq(*include_tag) && *interval < operation_interval {
+                                operation_interval = *interval;
+                            }
+                        }
+                    }
+                }
+
+                //check if include tag interval was found
+                if operation_interval == i64::max_value() {
                     continue;
                 }
 
                 //add operation
-                binary_heap.push(OperationJob::new(operation));
+                binary_heap.push(OperationJob::new(operation, operation_interval));
                 operations_added += 1;
             }
 
@@ -384,18 +430,6 @@ fn poll_bridge(
     Ok(())
 }
 
-fn contains_tags(tags: &Vec<&str>, operation_tags: &Vec<String>) -> bool {
-    for operation_tag in operation_tags {
-        for tag in tags {
-            if operation_tag.eq(*tag) {
-                return true;
-            }
-        }
-    }
-
-    false
-}
-
 /*
  * OperationJob implementation
  */
@@ -403,15 +437,17 @@ fn contains_tags(tags: &Vec<&str>, operation_tags: &Vec<String>) -> bool {
 struct OperationJob  {
     execution_time: i64,
     operation: Operation,
+    interval: i64,
 }
 
 impl OperationJob {
-    fn new(operation: Operation) -> OperationJob {
+    fn new(operation: Operation, interval: i64) -> OperationJob {
         let now = time::now_utc().to_timespec().sec;
 
         OperationJob {
-            execution_time: (now - (now % operation.interval as i64) + operation.interval as i64),
+            execution_time: (now - (now % interval) + interval),
             operation: operation,
+            interval: interval,
         }
     }
 }

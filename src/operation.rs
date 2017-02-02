@@ -16,7 +16,6 @@ pub struct Operation {
     pub domain: String,
     pub url: String,
     pub parameters: Option<HashMap<String, String>>,
-    pub interval: u32,
     pub tags: Option<Vec<String>>,
 }
 
@@ -69,11 +68,6 @@ impl Operation {
             _ => return Err(Error::Proddle(String::from("failed to parse parameters as array"))),
         };
 
-        let interval = match document.get("interval") {
-            Some(&Bson::I32(interval)) => interval as u32,
-            _ => return Err(Error::Proddle(String::from("failed to parse interval as i32"))),
-        };
-
         let tags: Option<Vec<String>> = match document.get("tags") {
             Some(&Bson::Array(ref tags)) => Some(tags.iter().map(|x| x.to_string().replace("\"", "")).collect()),
             _ => return Err(Error::Proddle(String::from("failed to parse tags as array"))),
@@ -86,7 +80,6 @@ impl Operation {
                 domain: domain,
                 url: url,
                 parameters: parameters,
-                interval: interval,
                 tags: tags,
             }
         )
@@ -123,8 +116,6 @@ impl Operation {
             false  => None,
         };
 
-        let interval = msg.get_interval();
-
         let tags = match msg.has_tags() {
             true => Some(msg.get_tags().unwrap().iter().map(|x| x.unwrap().to_string()).collect()),
             false => None,
@@ -137,7 +128,6 @@ impl Operation {
                 domain: domain,
                 url: url,
                 parameters: parameters,
-                interval: interval,
                 tags: tags,
             }
         )

@@ -31,8 +31,7 @@ struct Operation {
     domain @2 :Text;
     url @3 :Text;
     parameters @4 :List(Parameter);
-    interval @5 :UInt32;
-    tags @6 :List(Text);
+    tags @5 :List(Text);
 }
 
 struct OperationBucket {

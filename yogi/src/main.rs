@@ -139,11 +139,6 @@ fn main() {
                 None => Vec::new(),
             };
 
-            let interval = match matches.value_of("INTERVAL").unwrap().parse::<i32>() {
-                Ok(interval) => interval,
-                Err(e) => panic!("failed to parse interval into integer: {}", e),
-            };
-
             let tags: Vec<Bson> = match matches.values_of("TAG") {
                 Some(tags) => tags.map(|x| Bson::String(x.to_owned())).collect(),
                 None => Vec::new(),
@@ -163,7 +158,6 @@ fn main() {
                 "domain" => domain,
                 "url" => url,
                 "parameters" => parameters,
-                "interval" => interval,
                 "tags" => tags
             };
 

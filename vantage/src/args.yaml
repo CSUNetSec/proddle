@@ -62,7 +62,7 @@ args:
         long: tag
         takes_value: true
         multiple: true
-        help: Include operation if tag is present.
+        help: Include operation with interval if tag is present (ex. -t core|14400).
     - EXCLUDE_TAGS:
         short: x
         long: exclude_tag

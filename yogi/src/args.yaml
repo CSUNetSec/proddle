@@ -53,12 +53,6 @@ subcommands:
                     - URL:
                         required: true
                         help: Url name.
-                    - INTERVAL:
-                        short: i
-                        long: interval
-                        takes_value: true
-                        default_value: "14400"
-                        help: Operation execution interval in seconds.
                     - PARAMETER:
                         short: p
                         long: parameter

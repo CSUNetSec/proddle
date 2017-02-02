@@ -268,8 +268,6 @@ impl Server for ServerImpl {
                     }
                 }
 
-                result_operation.set_interval(operation.interval);
-
                 if let Some(ref tags) = operation.tags {
                     let mut operation_tags = result_operation.borrow().init_tags(tags.len() as u32);
                     for (i, tag) in tags.iter().enumerate() {
