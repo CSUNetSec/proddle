@@ -137,7 +137,21 @@ impl Operation {
 impl Hash for Operation {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.timestamp.hash(state);
-        self.domain.hash(state);
         self.measurement.hash(state);
+        self.domain.hash(state);
+        self.url.hash(state);
+
+        if let Some(ref parameters) = self.parameters {
+            for (key, value) in parameters {
+                key.hash(state);
+                value.hash(state);
+            }
+        }
+
+        if let Some(ref tags) = self.tags {
+            for tag in tags {
+                tag.hash(state);
+            }
+        }
     }
 }
