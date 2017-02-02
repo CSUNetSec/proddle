@@ -32,17 +32,17 @@ impl Measurement {
     pub fn from_mongodb(document: &OrderedDocument) -> Result<Measurement, Error> {
         let timestamp = match document.get("timestamp") {
             Some(&Bson::I64(timestamp)) => Some(timestamp as u64),
-            _ => return Err(Error::Proddle("failed to parse timestamp as i64".to_owned())),
+            _ => return Err(Error::Proddle(String::from("failed to parse timestamp as i64"))),
         };
 
         let measurement_name = match document.get("name") {
             Some(&Bson::String(ref name)) => name.to_owned(),
-            _ => return Err(Error::Proddle("failed to parse name as string".to_owned())),
+            _ => return Err(Error::Proddle(String::from("failed to parse name as string"))),
         };
 
         let version = match document.get("version") {
             Some(&Bson::I32(version)) => version as u16,
-            _ => return Err(Error::Proddle("failed to parse version as i32".to_owned())),
+            _ => return Err(Error::Proddle(String::from("failed to parse version as i32"))),
         };
 
         let parameters: Option<HashMap<String, String>> = match document.get("parameters") {
@@ -51,17 +51,17 @@ impl Measurement {
                 for parameter in parameters.iter() {
                     let document = match parameter {
                         &Bson::Document(ref document) => document,
-                        _ => return Err(Error::Proddle("failed to parameter name as bson document".to_owned())),
+                        _ => return Err(Error::Proddle(String::from("failed to parameter name as bson document"))),
                     };
 
                     let name = match document.get("name") {
                         Some(&Bson::String(ref name)) => name,
-                        _ => return Err(Error::Proddle("failed to parse parameter name as string".to_owned())),
+                        _ => return Err(Error::Proddle(String::from("failed to parse parameter name as string"))),
                     };
 
                     let value = match document.get("value") {
                         Some(&Bson::String(ref value)) => value,
-                        _ => return Err(Error::Proddle("mongodb: failed to parse parameter value as string".to_owned())),
+                        _ => return Err(Error::Proddle(String::from("mongodb: failed to parse parameter value as string"))),
                     };
 
                     hash_map.insert(name.to_owned(), value.to_owned());
@@ -69,17 +69,17 @@ impl Measurement {
 
                 Some(hash_map)
             },
-            _ => return Err(Error::Proddle("failed to parse parameters as array".to_owned())),
+            _ => return Err(Error::Proddle(String::from("failed to parse parameters as array"))),
         };
 
         let dependencies: Option<Vec<String>> = match document.get("dependencies") {
             Some(&Bson::Array(ref dependencies)) => Some(dependencies.iter().map(|x| x.to_string().replace("\"", "")).collect()),
-            _ => return Err(Error::Proddle("failed to parse dependencies as array".to_owned())),
+            _ => return Err(Error::Proddle(String::from("failed to parse dependencies as array"))),
         };
         
         let content = match document.get("content") {
             Some(&Bson::String(ref content)) => Some(content.to_owned()),
-            _ => return Err(Error::Proddle("failed to parse content as string".to_owned())),
+            _ => return Err(Error::Proddle(String::from("failed to parse content as string"))),
         };
 
         Ok(
@@ -109,12 +109,12 @@ impl Measurement {
                 for parameter in msg.get_parameters().unwrap().iter() {
                     let name = match parameter.get_name() {
                         Ok(name) => name,
-                        Err(_) => return Err(Error::Proddle("failed to retrieve name from parameter".to_owned())),
+                        Err(_) => return Err(Error::Proddle(String::from("failed to retrieve name from parameter"))),
                     };
 
                     let value = match parameter.get_value() {
                         Ok(value) => value,
-                        Err(_) => return Err(Error::Proddle("failed to retrieve value from parameter".to_owned())),
+                        Err(_) => return Err(Error::Proddle(String::from("failed to retrieve value from parameter"))),
                     };
 
                     hash_map.insert(name.to_owned(), value.to_owned());
