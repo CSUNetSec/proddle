@@ -187,12 +187,12 @@ pub fn main() {
                             thread_pool.execute(move || {
                                 //execute operation and store results in json string
                                 let mut result = String::from_str("{").unwrap();
-                                result.push_str(&format!("\"Timestamp\":{}", time::now_utc().to_timespec().sec));
-                                result.push_str(&format!(",\"Hostname\":\"{}\"", pool_hostname));
-                                result.push_str(&format!(",\"IpAddress\":\"{}\"", pool_ip_address));
-                                result.push_str(&format!(",\"Measurement\":\"{}\"", pool_operation_job.operation.measurement));
-                                result.push_str(&format!(",\"Domain\":\"{}\"", pool_operation_job.operation.domain));
-                                result.push_str(&format!(",\"Url\":\"{}\"", pool_operation_job.operation.url));
+                                result.push_str(&format!("\"timestamp\":{}", time::now_utc().to_timespec().sec));
+                                result.push_str(&format!(",\"hostname\":\"{}\"", pool_hostname));
+                                result.push_str(&format!(",\"ip_address\":\"{}\"", pool_ip_address));
+                                result.push_str(&format!(",\"measurement\":\"{}\"", pool_operation_job.operation.measurement));
+                                result.push_str(&format!(",\"domain\":\"{}\"", pool_operation_job.operation.domain));
+                                result.push_str(&format!(",\"url\":\"{}\"", pool_operation_job.operation.url));
 
                                 let mut arguments = Vec::new();
                                 if let Some(parameters) = pool_operation_job.operation.parameters {
@@ -207,9 +207,9 @@ pub fn main() {
                                             .args(&arguments)
                                             .output() {
                                     Ok(output) => {
-                                        result.push_str(&format!(",\"Error\":false,\"Result\":{}", String::from_utf8_lossy(&output.stdout).into_owned()));
+                                        result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout).into_owned()));
                                     },
-                                    Err(e) => result.push_str(&format!(",\"Error\":true,\"ErrorMessage\":\"{}\"", e)),
+                                    Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
                                 };
 
                                 result.push_str("}");
