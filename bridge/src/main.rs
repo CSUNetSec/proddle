@@ -16,9 +16,10 @@ extern crate rustc_serialize;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
-use clap::App;
+use clap::{App, ArgMatches};
 use futures::{Future, Stream};
 use mongodb::{Client, ThreadedClient};
+use proddle::Error;
 use proddle::proddle_capnp::proddle::ToClient;
 use tokio_core::net::TcpListener;
 use tokio_core::io::Io;
@@ -31,6 +32,16 @@ use server::ServerImpl;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
+fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16), Error> {
+    let bridge_ip_address = try!(value_t!(matches, "BRIDGE_IP_ADDRESS", String));
+    let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
+    let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
+    let mongodb_ip_address = try!(value_t!(matches, "MONGODB_IP_ADDRESS", String));
+    let mongodb_port = try!(value_t!(matches.value_of("MONGODB_PORT"), u16));
+
+    Ok((bridge_address, mongodb_ip_address, mongodb_port))
+}
+
 pub fn main() {
     env_logger::init().unwrap();
     let yaml = load_yaml!("args.yaml");
@@ -38,15 +49,13 @@ pub fn main() {
 
     //initialize bridge parameters
     info!("parsing command line arguments");
-    let listen_socket_address = format!("{}:{}", matches.value_of("BRIDGE_IP_ADDRESS").unwrap(), matches.value_of("BRIDGE_PORT").unwrap());
-    let mongodb_ip_address = matches.value_of("MONGODB_IP_ADDRESS").unwrap();
-    let mongodb_port = match matches.value_of("MONGODB_PORT").unwrap().parse::<u16>() {
-        Ok(mongodb_port) => mongodb_port,
-        Err(e) => panic!("failed to parse mongodb_port as u16: {}", e),
+    let (bridge_address, mongodb_ip_address, mongodb_port) = match parse_args(&matches) {
+        Ok(args) => args,
+        Err(e) => panic!("{}", e),
     };
 
     //pasre socket address
-    let socket_addr = match SocketAddr::from_str(&listen_socket_address) {
+    let socket_addr = match SocketAddr::from_str(&bridge_address) {
         Ok(socket_addr) => socket_addr,
         Err(e) => panic!("failed to parse socket address: {}", e),
     };
@@ -57,7 +66,7 @@ pub fn main() {
     let socket = TcpListener::bind(&socket_addr, &handle).unwrap();
 
     //connect to mongodb
-    let client = match Client::connect(mongodb_ip_address, mongodb_port)  {
+    let client = match Client::connect(&mongodb_ip_address, mongodb_port)  {
         Ok(client) => client,
         Err(e) => panic!("failed to connect to mongodb: {}", e),
     };

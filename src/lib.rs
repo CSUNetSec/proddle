@@ -1,6 +1,7 @@
 #[macro_use(bson, doc)]
 extern crate bson;
 extern crate capnp;
+extern crate clap;
 extern crate mongodb;
 
 mod error;

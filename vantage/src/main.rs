@@ -13,8 +13,8 @@ extern crate threadpool;
 extern crate time;
 extern crate tokio_core;
 
-use clap::App;
-use proddle::Measurement;
+use clap::{App, ArgMatches};
+use proddle::{Error, Measurement};
 use threadpool::ThreadPool;
 
 mod operation_job;
@@ -26,56 +26,24 @@ use std::collections::{BinaryHeap, HashMap};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 
-pub fn main() {
-    env_logger::init().unwrap();
-    let yaml = load_yaml!("args.yaml");
-    let matches = App::from_yaml(yaml).get_matches();
-
-    //initialize vantage parameters
-    info!("parsing command line arguments");
-    let hostname = matches.value_of("HOSTNAME").unwrap().to_owned();
-    let ip_address = matches.value_of("IP_ADDRESS").unwrap().to_owned();
-    let measurements_directory = matches.value_of("MEASUREMENTS_DIRECTORY").unwrap().to_owned();
-    let bucket_count = match matches.value_of("BUCKET_COUNT").unwrap().parse::<u64>() {
-        Ok(bucket_count) => bucket_count,
-        Err(e) => panic!("failed to parse bucket_count as u64: {}", e),
-    };
-
-    let thread_count = match matches.value_of("THREAD_COUNT").unwrap().parse::<usize>() {
-        Ok(thread_count) => thread_count,
-        Err(e) => panic!("failed to parse thread_count as usize: {}", e),
-    };
-
-    let bridge_address = &format!("{}:{}", matches.value_of("BRIDGE_IP_ADDRESS").unwrap(), matches.value_of("BRIDGE_PORT").unwrap());
-    let bridge_update_interval_seconds = match matches.value_of("BRIDGE_UPDATE_INTERVAL_SECONDS").unwrap().parse::<u64>() {
-        Ok(bridge_update_interval_seconds) => bridge_update_interval_seconds,
-        Err(e) => panic!("failed to parse bridge_update_interval_seconds as u64: {}", e),
-    };
-
-    let send_results_interval_seconds = match matches.value_of("SEND_RESULTS_INTERVAL_SECONDS").unwrap().parse::<u32>() {
-        Ok(send_results_interval_seconds) => send_results_interval_seconds,
-        Err(e) => panic!("failed to parse send_results_interval_seconds as u32: {}", e),
-    };
-
+fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u64, u32, HashMap<&'a str, i64>, Vec<&'a str>), Error> {
+    let hostname = try!(value_t!(matches, "HOSTNAME", String));
+    let ip_address = try!(value_t!(matches, "IP_ADDRESS", String));
+    let measurements_directory = try!(value_t!(matches, "MEASUREMENTS_DIRECTORY", String));
+    let bucket_count = try!(value_t!(matches.value_of("BUCKET_COUNT"), u64));
+    let thread_count = try!(value_t!(matches.value_of("THREAD_COUNT"), usize));
+    let bridge_ip_address = try!(matches.value_of("BRIDGE_IP_ADDRESS").ok_or("failed to parse bridge ip address"));
+    let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
+    let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
+    let bridge_update_interval_seconds = try!(value_t!(matches.value_of("BRIDGE_UPDATE_INTERVAL_SECONDS"), u64));
+    let send_results_interval_seconds = try!(value_t!(matches.value_of("SEND_RESULTS_INTERVAL_SECONDS"), u32));
     let include_tags = match matches.values_of("INCLUDE_TAGS") {
         Some(include_tags) => {
             let mut hash_map = HashMap::new();
             for include_tag in include_tags {
                 let mut split_values = include_tag.split("|");
-                let tag = match split_values.nth(0) {
-                    Some(tag) => tag,
-                    None => panic!("failed to collect include tag name"),
-                };
-
-                let interval = match split_values.nth(0) {
-                    Some(interval) => {
-                        match interval.parse::<i64>() {
-                            Ok(interval) => interval,
-                            Err(e) => panic!("failed to parse include tag interval as u32: {}", e),
-                        }
-                    },
-                    None => panic!("failed to collect include tag interval"),
-                };
+                let tag = try!(split_values.nth(0).ok_or("failed to fetch include tag"));
+                let interval = try!(try!(split_values.nth(0).ok_or("failed to fetch include tag interval")).parse::<i64>());
 
                 hash_map.insert(tag, interval);
             }
@@ -90,9 +58,25 @@ pub fn main() {
         None => Vec::new(),
     };
 
-    info!("initializing vantage data structures");
+    Ok((hostname, ip_address, measurements_directory, bucket_count, thread_count, bridge_address, 
+        bridge_update_interval_seconds, send_results_interval_seconds, include_tags, exclude_tags))
+}
+
+pub fn main() {
+    env_logger::init().unwrap();
+    let yaml = load_yaml!("args.yaml");
+    let matches = App::from_yaml(yaml).get_matches();
+    
+    //initialize vantage parameters
+    info!("parsing command line arguments");
+    let (hostname, ip_address, measurements_directory, bucket_count, thread_count, bridge_address, 
+         bridge_update_interval_seconds, send_results_interval_seconds, include_tags, exclude_tags) = match parse_args(&matches) {
+        Ok(args) => args,
+        Err(e) => panic!("{}", e),
+    };
 
     //initialize vantage data structures
+    info!("initializing vantage data structures");
     let measurements: Arc<RwLock<HashMap<String, Measurement>>> = Arc::new(RwLock::new(HashMap::new()));
     let operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>> = Arc::new(RwLock::new(HashMap::new()));
     let operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>> = Arc::new(RwLock::new(HashMap::new()));
@@ -111,12 +95,8 @@ pub fn main() {
         }
     }
 
-    //create result channels
-    let (tx, rx) = chan::sync(0);
-
-    info!("service started");
-
     //start recv result channel
+    let (tx, rx) = chan::sync(0);
     let thread_bridge_address = bridge_address.clone();
     std::thread::spawn(move || {
         let mut result_buffer: Vec<String> = Vec::new();
@@ -217,12 +197,12 @@ pub fn main() {
     //start loop to periodically request measurements and operations
     loop {
         info!("retrieving updates from bridge");
-        match client::update_measurements(measurements.clone(), &measurements_directory, bridge_address) {
+        match client::update_measurements(measurements.clone(), &measurements_directory, &bridge_address) {
             Ok(measurements_added) => info!("added {} measurements", measurements_added),
             Err(e) => error!("{}", e),
         }
 
-        match client::update_operations(operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, bridge_address) {
+        match client::update_operations(operations.clone(), operation_bucket_hashes.clone(), &include_tags, &exclude_tags, &bridge_address) {
             Ok(operations_added) => info!("added {} operations", operations_added),
             Err(e) => error!("{}", e),
         }
