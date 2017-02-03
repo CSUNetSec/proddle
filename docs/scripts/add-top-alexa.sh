@@ -1,5 +1,9 @@
 #!/bin/bash
 TMP_DIR="/tmp"
+PREFIXES=(
+    "https://www."
+    "http://www."
+)
 
 if [ $# -ne 1 ]; then
     echo "Usage: $0 COUNT"
@@ -17,11 +21,21 @@ do
     #parse domain
     DOMAIN=`echo $LINE | cut -f 2 -d ','`
 
-    #echo $DOMAIN
-    ./../target/debug/yogi operation add -i 14400 http-get $DOMAIN
+    for PREFIX in "${PREFIXES[@]}"; do
+        curl -L $PREFIX$DOMAIN >> /dev/null
+        if [ $? -eq 0 ]; then
+            ./../../yogi/target/debug/yogi operation add http-get $DOMAIN $PREFIX$DOMAIN -t core -t http
+            echo "SUCCESS $DOMAIN"
 
-    #increment counter
-    COUNT=$[COUNT+1]
+            #increment counter
+            COUNT=$[COUNT+1]
+            break
+        else
+            echo "FAIL $DOMAIN"
+        fi
+    done
+
+    #check counter
     if [ $COUNT == $1 ];
     then
         break
