@@ -42,33 +42,31 @@ fn main() {
         Err(e) => panic!("{}", e),
     };
 
-    if let Some(matches) = matches.subcommand_matches("measurement") {
+    let result = if let Some(matches) = matches.subcommand_matches("measurement") {
         if let Some(matches) = matches.subcommand_matches("add") {
-            if let Err(e) = measurement::add(client, matches) {
-                panic!("{}", e);
-            }
+            measurement::add(client, matches)
         } else if let Some(matches) = matches.subcommand_matches("delete") {
-            if let Err(e) = measurement::delete(client, matches) {
-                panic!("{}", e);
-            }
+            measurement::delete(client, matches)
         } else if let Some(matches) = matches.subcommand_matches("search") {
-            if let Err(e) = measurement::search(client, matches) {
-                panic!("{}", e);
-            }
+            measurement::search(client, matches)
+        } else {
+            panic!("measurement unreachable");
         }
     } else if let Some(matches) = matches.subcommand_matches("operation") {
         if let Some(matches) = matches.subcommand_matches("add") {
-            if let Err(e) = operation::add(client, matches) {
-                panic!("{}", e);
-            }
+            operation::add(client, matches)
         } else if let Some(matches) = matches.subcommand_matches("delete") {
-            if let Err(e) = operation::delete(client, matches) {
-                panic!("{}", e);
-            }
+            operation::delete(client, matches)
         } else if let Some(matches) = matches.subcommand_matches("search") {
-            if let Err(e) = operation::search(client, matches) {
-                panic!("{}", e);
-            }
+            operation::search(client, matches)
+        } else {
+            panic!("operation unreachable");
         }
+    } else {
+        panic!("unreachable");
+    };
+
+    if let Err(e) = result {
+        panic!("{}", e);
     }
 }
