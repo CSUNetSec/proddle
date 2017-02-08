@@ -3,8 +3,7 @@ extern crate proddle;
 
 use bson::{Bson, Document};
 use capnp::capability::Promise;
-use mongodb::{Client, ThreadedClient};
-use mongodb::db::ThreadedDatabase;
+use mongodb::db::{Database, ThreadedDatabase};
 use proddle::{Measurement, Operation};
 use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
 use proddle::proddle_capnp::proddle::Server;
@@ -25,13 +24,13 @@ macro_rules! cry {
 }
 
 pub struct ServerImpl {
-    mongodb_client: Client,
+    mongodb_db: Database,
 }
 
 impl ServerImpl {
-    pub fn new(mongodb_client: Client) -> ServerImpl {
+    pub fn new(mongodb_db: Database) -> ServerImpl {
         ServerImpl {
-            mongodb_client: mongodb_client,
+            mongodb_db: mongodb_db,
         }
     }
 }
@@ -43,7 +42,7 @@ impl Server for ServerImpl {
         
         //iterate over measurements in mongodb and store in measurements map
         let mut measurements = HashMap::new();
-        let cursor = cry!(proddle::find_measurements(self.mongodb_client.clone(), None, None, None, false));
+        let cursor = cry!(proddle::find_measurements(&self.mongodb_db, None, None, None, false));
         for document in cursor {
             let document = cry!(document);
 
@@ -135,7 +134,7 @@ impl Server for ServerImpl {
         }
         
         //iterate over operations in mongodb and store in operations map
-        let cursor = cry!(proddle::find_operations(self.mongodb_client.clone(), None, None, None, false));
+        let cursor = cry!(proddle::find_operations(&self.mongodb_db, None, None, None, false));
         for document in cursor {
             let document = cry!(document);
 
@@ -229,7 +228,7 @@ impl Server for ServerImpl {
             };
 
             //insert document
-            if let Err(e) = self.mongodb_client.db("proddle").collection("results").insert_one(document, None) {
+            if let Err(e) = self.mongodb_db.collection("results").insert_one(document, None) {
                 error!("{}", e);
             }
         }

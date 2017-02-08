@@ -19,6 +19,7 @@ use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::{App, ArgMatches};
 use futures::{Future, Stream};
 use mongodb::{Client, ClientOptions, ThreadedClient};
+use mongodb::db::ThreadedDatabase;
 use proddle::Error;
 use proddle::proddle_capnp::proddle::ToClient;
 use tokio_core::net::TcpListener;
@@ -32,7 +33,7 @@ use server::ServerImpl;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, String, String), Error> {
+fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, String, String, String, String), Error> {
     let bridge_ip_address = try!(value_t!(matches, "BRIDGE_IP_ADDRESS", String));
     let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
     let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
@@ -41,8 +42,10 @@ fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, Stri
     let ca_file = try!(value_t!(matches.value_of("CA_FILE"), String));
     let certificate_file = try!(value_t!(matches.value_of("CERTIFICATE_FILE"), String));
     let key_file = try!(value_t!(matches.value_of("KEY_FILE"), String));
+    let username = try!(value_t!(matches.value_of("USERNAME"), String));
+    let password = try!(value_t!(matches.value_of("PASSWORD"), String));
 
-    Ok((bridge_address, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file))
+    Ok((bridge_address, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file, username, password))
 }
 
 pub fn main() {
@@ -52,7 +55,7 @@ pub fn main() {
 
     //initialize bridge parameters
     info!("parsing command line arguments");
-    let (bridge_address, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file) = match parse_args(&matches) {
+    let (bridge_address, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file, username, password) = match parse_args(&matches) {
         Ok(args) => args,
         Err(e) => panic!("{}", e),
     };
@@ -75,9 +78,14 @@ pub fn main() {
         Err(e) => panic!("failed to connect to mongodb: {}", e),
     };
 
+    let db = client.db("proddle");
+    if let Err(e) = db.auth(&username, &password) {
+        panic!("{}", e);
+    }
+
     //initialize proddle bridge
     info!("initializing bridge data strucutes");
-    let proddle = ToClient::new(ServerImpl::new(client)).from_server::<capnp_rpc::Server>();
+    let proddle = ToClient::new(ServerImpl::new(db)).from_server::<capnp_rpc::Server>();
     
     //start rpc loop
     info!("service started");
