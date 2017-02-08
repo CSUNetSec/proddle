@@ -1,7 +1,6 @@
 use bson::Bson;
 use clap::ArgMatches;
-use mongodb::{Client, ThreadedClient};
-use mongodb::db::ThreadedDatabase;
+use mongodb::db::{Database, ThreadedDatabase};
 use proddle;
 use proddle::Error;
 use time;
@@ -9,7 +8,7 @@ use time;
 use std::fs::File;
 use std::io::Read;
 
-pub fn add(client: Client, matches: &ArgMatches) -> Result<(), Error> {
+pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
     let file = try!(value_t!(matches, "FILE", String));
     let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
     let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
@@ -32,7 +31,7 @@ pub fn add(client: Client, matches: &ArgMatches) -> Result<(), Error> {
         None => Vec::new(),
     };
 
-    let version = match proddle::find_measurement(client.clone(), &measurement_name, None, true) {
+    let version = match proddle::find_measurement(db, &measurement_name, None, true) {
         Ok(Some(document)) => {
             match document.get("version") {
                 Some(&Bson::I32(document_version)) => document_version + 1,
@@ -59,18 +58,18 @@ pub fn add(client: Client, matches: &ArgMatches) -> Result<(), Error> {
     };
 
     //insert document
-    try!(client.db("proddle").collection("measurements").insert_one(document, None));
+    try!(db.collection("measurements").insert_one(document, None));
     Ok(())
 }
 
-pub fn delete(_: Client, _: &ArgMatches) -> Result<(), Error> {
+pub fn delete(_: &Database, _: &ArgMatches) -> Result<(), Error> {
     unimplemented!();
 }
 
-pub fn search(client: Client, matches: &ArgMatches) -> Result<(), Error> {
+pub fn search(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
     let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
     
-    let cursor = try!(proddle::find_measurements(client.clone(), Some(&measurement_name), None, Some(1), true));
+    let cursor = try!(proddle::find_measurements(db, Some(&measurement_name), None, Some(1), true));
     for document in cursor {
         let document = try!(document);
         println!("{:?}", document);

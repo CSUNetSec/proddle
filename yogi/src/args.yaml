@@ -27,8 +27,18 @@ args:
     - KEY_FILE:
         short: k
         long: key_file
-        takes_value: tru
+        takes_value: true
         help: Key file for ssl connection.
+    - USERNAME:
+        short: u
+        long: username
+        takes_value: true
+        help: Username for mongodb connection.
+    - PASSWORD:
+        short: p
+        long: password
+        takes_value: true
+        help: Password for mongodb connection.
 subcommands:
     - measurement:
         about: Performs actions on measurements.

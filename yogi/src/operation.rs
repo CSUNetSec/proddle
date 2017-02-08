@@ -1,12 +1,11 @@
 use bson::Bson;
 use clap::ArgMatches;
-use mongodb::{Client, ThreadedClient};
-use mongodb::db::ThreadedDatabase;
+use mongodb::db::{Database, ThreadedDatabase};
 use proddle;
 use proddle::Error;
 use time;
 
-pub fn add(client: Client, matches: &ArgMatches) -> Result<(), Error> {
+pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
     let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
     let domain = try!(value_t!(matches, "DOMAIN", String));
     let url = try!(value_t!(matches, "URL", String));
@@ -38,7 +37,7 @@ pub fn add(client: Client, matches: &ArgMatches) -> Result<(), Error> {
     };
 
     //check if measurement exists
-    try!(proddle::find_measurement(client.clone(), &measurement_name, None, true));
+    try!(proddle::find_measurement(db, &measurement_name, None, true));
 
     //create opeation document
     let timestamp = time::now_utc().to_timespec().sec;
@@ -52,18 +51,18 @@ pub fn add(client: Client, matches: &ArgMatches) -> Result<(), Error> {
     };
 
     //insert document
-    try!(client.db("proddle").collection("operations").insert_one(document, None));
+    try!(db.collection("operations").insert_one(document, None));
     Ok(())
 }
 
-pub fn delete(_: Client, _: &ArgMatches) -> Result<(), Error> {
+pub fn delete(_: &Database, _: &ArgMatches) -> Result<(), Error> {
     unimplemented!();
 }
 
-pub fn search(client: Client, matches: &ArgMatches) -> Result<(), Error> {
+pub fn search(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
     let domain = try!(value_t!(matches, "DOMAIN", String));
 
-    let cursor = try!(proddle::find_operations(client.clone(), Some(&domain), None, None, true));
+    let cursor = try!(proddle::find_operations(db, Some(&domain), None, None, true));
     for document in cursor {
         println!("{:?}", document);
     }

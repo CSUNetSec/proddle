@@ -17,15 +17,14 @@ pub use self::measurement::Measurement;
 pub use self::operation::Operation;
 
 use bson::ordered::OrderedDocument;
-use mongodb::{Client, ClientInner, ThreadedClient};
+use mongodb::{Client, ThreadedClient};
 use mongodb::coll::options::{CursorType, FindOptions};
 use mongodb::cursor::Cursor;
-use mongodb::db::ThreadedDatabase;
+use mongodb::db::{Database, ThreadedDatabase};
 
 use std::collections::BTreeMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 
 /*
  * Miscellaneous
@@ -56,7 +55,7 @@ pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, Error> {
     Ok(try!(Client::connect(host, port)))
 }
 
-pub fn find_measurement(client: Arc<ClientInner>, measurement_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, Error> {
+pub fn find_measurement(db: &Database, measurement_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, Error> {
     //create search document
     let search_document = match version {
         Some(search_version) => Some(doc! { "name" => measurement_name, "version" => search_version }),
@@ -87,10 +86,10 @@ pub fn find_measurement(client: Arc<ClientInner>, measurement_name: &str, versio
     });
 
     //execute find one
-    Ok(try!(client.db("proddle").collection("measurements").find_one(search_document, find_options)))
+    Ok(try!(db.collection("measurements").find_one(search_document, find_options)))
 }
 
-pub fn find_measurements(client: Arc<ClientInner>, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i32>, order_by_version: bool) -> Result<Cursor, Error> {
+pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i32>, order_by_version: bool) -> Result<Cursor, Error> {
     //create search document
     let search_document = match measurement_name {
         Some(search_measurement_name) => {
@@ -131,10 +130,10 @@ pub fn find_measurements(client: Arc<ClientInner>, measurement_name: Option<&str
     });
 
     //execute find
-    Ok(try!(client.db("proddle").collection("measurements").find(search_document, find_options)))
+    Ok(try!(db.collection("measurements").find(search_document, find_options)))
 }
 
-pub fn find_operation(client: Arc<ClientInner>, domain: &str, measurement_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, Error> {
+pub fn find_operation(db: &Database, domain: &str, measurement_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, Error> {
     //create search document
     let search_document = match measurement_name {
         Some(search_measurement_name) => Some(doc! { "domain" => domain, "measurement" => search_measurement_name }),
@@ -165,10 +164,10 @@ pub fn find_operation(client: Arc<ClientInner>, domain: &str, measurement_name: 
     });
 
     //execute find one
-    Ok(try!(client.db("proddle").collection("operations").find_one(search_document, find_options)))
+    Ok(try!(db.collection("operations").find_one(search_document, find_options)))
 }
 
-pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i32>, order_by_timestamp: bool) -> Result<Cursor, Error> {
+pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i32>, order_by_timestamp: bool) -> Result<Cursor, Error> {
     //create search document
     let search_document = match domain {
         Some(domain) => {
@@ -209,5 +208,5 @@ pub fn find_operations(client: Arc<ClientInner>, domain: Option<&str>, measureme
     });
 
     //specify operations collection
-    Ok(try!(client.db("proddle").collection("operations").find(search_document, find_options)))
+    Ok(try!(db.collection("operations").find(search_document, find_options)))
 }
