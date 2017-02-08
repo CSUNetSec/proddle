@@ -18,7 +18,7 @@ use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::{App, ArgMatches};
 use futures::{Future, Stream};
-use mongodb::{Client, ThreadedClient};
+use mongodb::{Client, ClientOptions, ThreadedClient};
 use proddle::Error;
 use proddle::proddle_capnp::proddle::ToClient;
 use tokio_core::net::TcpListener;
@@ -32,14 +32,17 @@ use server::ServerImpl;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16), Error> {
+fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, String, String), Error> {
     let bridge_ip_address = try!(value_t!(matches, "BRIDGE_IP_ADDRESS", String));
     let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
     let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
     let mongodb_ip_address = try!(value_t!(matches, "MONGODB_IP_ADDRESS", String));
     let mongodb_port = try!(value_t!(matches.value_of("MONGODB_PORT"), u16));
+    let ca_file = try!(value_t!(matches.value_of("CA_FILE"), String));
+    let certificate_file = try!(value_t!(matches.value_of("CERTIFICATE_FILE"), String));
+    let key_file = try!(value_t!(matches.value_of("KEY_FILE"), String));
 
-    Ok((bridge_address, mongodb_ip_address, mongodb_port))
+    Ok((bridge_address, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file))
 }
 
 pub fn main() {
@@ -49,7 +52,7 @@ pub fn main() {
 
     //initialize bridge parameters
     info!("parsing command line arguments");
-    let (bridge_address, mongodb_ip_address, mongodb_port) = match parse_args(&matches) {
+    let (bridge_address, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file) = match parse_args(&matches) {
         Ok(args) => args,
         Err(e) => panic!("{}", e),
     };
@@ -66,7 +69,8 @@ pub fn main() {
     let socket = TcpListener::bind(&socket_addr, &handle).unwrap();
 
     //connect to mongodb
-    let client = match Client::connect(&mongodb_ip_address, mongodb_port)  {
+    let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
+    let client = match Client::connect_with_options(&mongodb_ip_address, mongodb_port, client_options)  {
         Ok(client) => client,
         Err(e) => panic!("failed to connect to mongodb: {}", e),
     };
