@@ -9,107 +9,52 @@ extern crate rustc_serialize;
 extern crate time;
 
 use bson::Bson;
-use clap::App;
-use mongodb::ThreadedClient;
+use clap::{App, ArgMatches};
+use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
+use proddle::Error;
 
-use std::fs::File;
-use std::io::Read;
+mod measurement;
+
+fn parse_args(matches: &ArgMatches) -> Result<(String, u16, String, String, String), Error> {
+    let mongodb_ip_address = try!(value_t!(matches, "MONGODB_IP_ADDRESS", String));
+    let mongodb_port = try!(value_t!(matches.value_of("MONGODB_PORT"), u16));
+    let ca_file = try!(value_t!(matches.value_of("CA_FILE"), String));
+    let certificate_file = try!(value_t!(matches.value_of("CERTIFICATE_FILE"), String));
+    let key_file = try!(value_t!(matches.value_of("KEY_FILE"), String));
+
+    Ok((mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file))
+}
 
 fn main() {
     let yaml = load_yaml!("args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 
+    //initialize bridge parameters
+    let (mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file) = match parse_args(&matches) {
+        Ok(args) => args,
+        Err(e) => panic!("{}", e),
+    };
+
     //connect to mongodb
-    let client = match proddle::get_mongodb_client("localhost", 27017) {
+    let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
+    let client = match Client::connect_with_options(&mongodb_ip_address, mongodb_port, client_options)  {
         Ok(client) => client,
         Err(e) => panic!("{}", e),
     };
 
     if let Some(matches) = matches.subcommand_matches("measurement") {
         if let Some(matches) = matches.subcommand_matches("add") {
-            let file = matches.value_of("FILE").unwrap();
-            let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
-            let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
-                Some(parameters) => {
-                    parameters.map(
-                            |x| {
-                                let mut split_values = x.split("|");
-                                let name = match split_values.nth(0) {
-                                    Some(name) => name.to_owned(),
-                                    None => panic!("failed to parse name of parameter"),
-                                };
-
-                                let value = match split_values.nth(0) {
-                                    Some(value) => value.to_owned(),
-                                    None => panic!("failed to parse value of parameter '{}'", name),
-                                };
-
-                                Bson::Document(doc! {"name" => name, "value" => value})
-                            }
-                        ).collect()
-                },
-                None => Vec::new(),
-            };
-
-            let dependencies: Vec<Bson> = match matches.values_of("DEPENDENCY") {
-                Some(dependencies) => dependencies.map(|x| Bson::String(x.to_owned())).collect(),
-                None => Vec::new(),
-            };
-
-            let version = match proddle::find_measurement(client.clone(), measurement_name, None, true) {
-                Ok(Some(document)) => {
-                    match document.get("version") {
-                        Some(&Bson::I32(document_version)) => document_version + 1,
-                        _ => panic!("failed to parse version as i32"),
-                    }
-                },
-                _ => 1,
-            };
-
-            //read file into string buffer
-            let mut file = match File::open(file) {
-                Ok(file) => file,
-                Err(e) => panic!("failed to open file : {}", e),
-            };
-
-            let mut buffer = String::new();
-            if let Err(e) = file.read_to_string(&mut buffer) {
-                panic!("failed to read local file: {}", e);
-            }
-
-            //create measurement document
-            let timestamp = time::now_utc().to_timespec().sec;
-            let document = doc! { 
-                "timestamp" => timestamp,
-                "name" => measurement_name,
-                "version" => version,
-                "parameters" => parameters,
-                "dependencies" => dependencies,
-                "content" => buffer
-            };
-
-            //insert document
-            if let Err(e) = client.db("proddle").collection("measurements").insert_one(document, None) {
-                panic!("failed to upload measurement document: {}", e);
+            if let Err(e) = measurement::add(client, matches) {
+                panic!("{}", e);
             }
         } else if let Some(matches) = matches.subcommand_matches("delete") {
-            unimplemented!();
+            if let Err(e) = measurement::delete(client, matches) {
+                panic!("{}", e);
+            }
         } else if let Some(matches) = matches.subcommand_matches("search") {
-            let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
-
-            match proddle::find_measurements(client.clone(), Some(measurement_name), None, Some(1), true) {
-                Ok(cursor) => {
-                    for document in cursor {
-                        let document = match document {
-                            Ok(document) => document,
-                            Err(e) => panic!("failed to retrieve document: {}", e),
-                        };
-
-                        println!("{:?}", document);
-                    }
-                },
-                Err(e) => panic!("failed to find operations: {}", e),
+            if let Err(e) = measurement::search(client, matches) {
+                panic!("{}", e);
             }
         }
     } else if let Some(matches) = matches.subcommand_matches("operation") {

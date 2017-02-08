@@ -1,6 +1,34 @@
 name: yogi
 version: "1.0"
 author: Daniel Rammer <hamersaw@bushpath.com>
+args:
+    - MONGODB_IP_ADDRESS:
+        short: i
+        long: mongodb_ip_address
+        takes_value: true
+        default_value: 127.0.0.1
+        help: Ip address for mongodb instance.
+    - MONGODB_PORT:
+        short: p
+        long: mongodb_port
+        takes_value: true
+        default_value: "27017"
+        help: Port for mongodb instance.
+    - CA_FILE:
+        short: c
+        long: ca_file
+        takes_value: true
+        help: Certificate authority cert file for ssl connection.
+    - CERTIFICATE_FILE:
+        short: e
+        long: cert_file
+        takes_value: true
+        help: Certificate file for ssl connection.
+    - KEY_FILE:
+        short: k
+        long: key_file
+        takes_value: tru
+        help: Key file for ssl connection.
 subcommands:
     - measurement:
         about: Performs actions on measurements.
