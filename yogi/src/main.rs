@@ -8,13 +8,12 @@ extern crate rand;
 extern crate rustc_serialize;
 extern crate time;
 
-use bson::Bson;
 use clap::{App, ArgMatches};
 use mongodb::{Client, ClientOptions, ThreadedClient};
-use mongodb::db::ThreadedDatabase;
 use proddle::Error;
 
 mod measurement;
+mod operation;
 
 fn parse_args(matches: &ArgMatches) -> Result<(String, u16, String, String, String), Error> {
     let mongodb_ip_address = try!(value_t!(matches, "MONGODB_IP_ADDRESS", String));
@@ -59,69 +58,16 @@ fn main() {
         }
     } else if let Some(matches) = matches.subcommand_matches("operation") {
         if let Some(matches) = matches.subcommand_matches("add") {
-            let measurement_name = matches.value_of("MEASUREMENT_NAME").unwrap();
-            let domain = matches.value_of("DOMAIN").unwrap();
-            let url = matches.value_of("URL").unwrap();
-            let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
-                Some(parameters) => {
-                    parameters.map(
-                            |x| {
-                                let mut split_values = x.split("|");
-                                let name = match split_values.nth(0) {
-                                    Some(name) => name.to_owned(),
-                                    None => panic!("failed to parse name of parameter"),
-                                };
-
-                                let value = match split_values.nth(0) {
-                                    Some(value) => value.to_owned(),
-                                    None => panic!("failed to parse value of parameter '{}'", name),
-                                };
-
-                                Bson::Document(doc! {"name" => name, "value" => value})
-                            }
-                        ).collect()
-                },
-                None => Vec::new(),
-            };
-
-            let tags: Vec<Bson> = match matches.values_of("TAG") {
-                Some(tags) => tags.map(|x| Bson::String(x.to_owned())).collect(),
-                None => Vec::new(),
-            };
-
-            //check if measurement exists
-            match proddle::find_measurement(client.clone(), measurement_name, None, true) {
-                Ok(Some(_)) => {},
-                _ => panic!("measurement does not exist"),
-            }
-
-            //create opeation document
-            let timestamp = time::now_utc().to_timespec().sec;
-            let document = doc! {
-                "timestamp" => timestamp,
-                "measurement" => measurement_name,
-                "domain" => domain,
-                "url" => url,
-                "parameters" => parameters,
-                "tags" => tags
-            };
-
-            //insert document
-            if let Err(e) = client.db("proddle").collection("operations").insert_one(document, None) {
-                panic!("failed to upload operations document: {}", e);
+            if let Err(e) = operation::add(client, matches) {
+                panic!("{}", e);
             }
         } else if let Some(matches) = matches.subcommand_matches("delete") {
-            unimplemented!();
+            if let Err(e) = operation::delete(client, matches) {
+                panic!("{}", e);
+            }
         } else if let Some(matches) = matches.subcommand_matches("search") {
-            let domain = matches.value_of("DOMAIN").unwrap();
-
-            match proddle::find_operations(client.clone(), Some(domain), None, None, true) {
-                Ok(cursor) => {
-                    for document in cursor {
-                        println!("{:?}", document);
-                    }
-                },
-                Err(e) => panic!("failed to find operations: {}", e),
+            if let Err(e) = operation::search(client, matches) {
+                panic!("{}", e);
             }
         }
     }
