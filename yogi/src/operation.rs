@@ -11,22 +11,15 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
     let url = try!(value_t!(matches, "URL", String));
     let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
         Some(parameters) => {
-            parameters.map(
-                    |x| {
-                        let mut split_values = x.split("|");
-                        let name = match split_values.nth(0) {
-                            Some(name) => name.to_owned(),
-                            None => panic!("failed to parse name of parameter"),
-                        };
+            let mut params = Vec::new();
+            for parameter in parameters {
+                let mut split_values = parameter.split("|");
+                let name = try!(split_values.nth(0).ok_or("failed to parse parameter name")).to_owned();
+                let value = try!(split_values.nth(0).ok_or("failed to parse parameter value")).to_owned();
+                params.push(Bson::Document(doc! {"name" => name, "value" => value}));
+            }
 
-                        let value = match split_values.nth(0) {
-                            Some(value) => value.to_owned(),
-                            None => panic!("failed to parse value of parameter '{}'", name),
-                        };
-
-                        Bson::Document(doc! {"name" => name, "value" => value})
-                    }
-                ).collect()
+            params
         },
         None => Vec::new(),
     };
