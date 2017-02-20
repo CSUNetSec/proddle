@@ -72,11 +72,11 @@ pub fn find_measurement(db: &Database, measurement_name: &str, version: Option<i
     let find_options = Some(FindOptions {
         allow_partial_results: false,
         no_cursor_timeout: false,
-        op_log_replay: false,
-        skip: 0,
-        limit: 1,
+        oplog_replay: false,
+        skip: None,
+        limit: Some(1),
         cursor_type: CursorType::NonTailable,
-        batch_size: 0,
+        batch_size: None,
         comment: None,
         max_time_ms: None,
         modifiers: None,
@@ -89,7 +89,7 @@ pub fn find_measurement(db: &Database, measurement_name: &str, version: Option<i
     Ok(try!(db.collection("measurements").find_one(search_document, find_options)))
 }
 
-pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i32>, order_by_version: bool) -> Result<Cursor, Error> {
+pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i64>, order_by_version: bool) -> Result<Cursor, Error> {
     //create search document
     let search_document = match measurement_name {
         Some(search_measurement_name) => {
@@ -116,11 +116,11 @@ pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version:
     let find_options = Some(FindOptions {
         allow_partial_results: false,
         no_cursor_timeout: false,
-        op_log_replay: false,
-        skip: 0,
-        limit: limit.unwrap_or(0),
+        oplog_replay: false,
+        skip: None,
+        limit: limit,
         cursor_type: CursorType::NonTailable,
-        batch_size: 0,
+        batch_size: None,
         comment: None,
         max_time_ms: None,
         modifiers: None,
@@ -150,11 +150,11 @@ pub fn find_operation(db: &Database, domain: &str, measurement_name: Option<&str
     let find_options = Some(FindOptions {
         allow_partial_results: false,
         no_cursor_timeout: false,
-        op_log_replay: false,
-        skip: 0,
-        limit: 1,
+        oplog_replay: false,
+        skip: None,
+        limit: Some(1),
         cursor_type: CursorType::NonTailable,
-        batch_size: 0,
+        batch_size: None,
         comment: None,
         max_time_ms: None,
         modifiers: None,
@@ -167,7 +167,7 @@ pub fn find_operation(db: &Database, domain: &str, measurement_name: Option<&str
     Ok(try!(db.collection("operations").find_one(search_document, find_options)))
 }
 
-pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i32>, order_by_timestamp: bool) -> Result<Cursor, Error> {
+pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i64>, order_by_timestamp: bool) -> Result<Cursor, Error> {
     //create search document
     let search_document = match domain {
         Some(domain) => {
@@ -194,11 +194,11 @@ pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Op
     let find_options = Some(FindOptions {
         allow_partial_results: false,
         no_cursor_timeout: false,
-        op_log_replay: false,
-        skip: 0,
-        limit: limit.unwrap_or(0),
+        oplog_replay: false,
+        skip: None,
+        limit: limit,
         cursor_type: CursorType::NonTailable,
-        batch_size: 0,
+        batch_size: None,
         comment: None,
         max_time_ms: None,
         modifiers: None,
