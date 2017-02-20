@@ -174,7 +174,13 @@ pub fn main() {
                                             .arg(pool_operation_job.operation.url)
                                             .args(&arguments)
                                             .output() {
-                                    Ok(output) => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
+                                    Ok(output) => {
+                                        let stderr= String::from_utf8_lossy(&output.stderr);
+                                        match stderr.len() {
+                                            0 => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
+                                            _ => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
+                                        }
+                                    },
                                     Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
                                 };
 
