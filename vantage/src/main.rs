@@ -177,8 +177,8 @@ pub fn main() {
                                     Ok(output) => {
                                         let stderr= String::from_utf8_lossy(&output.stderr);
                                         match stderr.len() {
-                                            0 => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
-                                            _ => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
+                                            0 => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
+                                            _ => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
                                         }
                                     },
                                     Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
