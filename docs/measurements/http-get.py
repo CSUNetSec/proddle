@@ -13,6 +13,7 @@ c.setopt(c.URL, sys.argv[1])
 c.setopt(c.WRITEDATA, buffer)
 c.setopt(c.FOLLOWLOCATION, True)
 c.setopt(c.TIMEOUT, 120)
+c.setopt(c.USERAGENT, 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Ubuntu Chromium/55.0.2883.87 Chrome/55.0.2883.87 Safari/537.36')
 
 #execute request
 try:
