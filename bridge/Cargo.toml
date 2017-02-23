@@ -11,8 +11,7 @@ clap = {version = "2.19", features = ["yaml"]}
 env_logger = "0.3"
 futures = "0.1"
 log = "0.3"
-#mongodb = "0.1"
-mongodb = {version = "0.2", features = ["ssl"]}
+mongodb = {version = "0.2.1", features = ["ssl"]}
 proddle = {path = "../"}
 rustc-serialize = "0.3"
 tokio-core = "0.1"

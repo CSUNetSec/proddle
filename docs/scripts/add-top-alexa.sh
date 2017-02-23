@@ -6,8 +6,10 @@ fi
 
 TMP_DIR="/tmp"
 PREFIXES=(
-#    "https://www."
+    "https://www."
     "http://www."
+    "https://"
+    "http://"
 )
 
 USERNAME=$2
@@ -29,13 +31,16 @@ do
     DOMAIN=`echo $LINE | cut -f 2 -d ','`
 
     for PREFIX in "${PREFIXES[@]}"; do
-        curl -L $PREFIX$DOMAIN -m 30 >> /dev/null
-        if [ $? -eq 0 ]; then
+        CURL_RESULT=`curl -L $PREFIX$DOMAIN -m 20`
+        if [ $? -eq 0 ] && [ ! -z "$CURL_RESULT" ]; then
             ./../../yogi/target/debug/yogi -c $SSL_CA_CERT -e $SSL_CERT -k $SSL_KEY -u $USERNAME -p $PASSWORD -I $MONGO_HOST operation add http-get $DOMAIN $PREFIX$DOMAIN -t core -t http
             echo "SUCCESS $DOMAIN"
+            echo $PREFIX$DOMAIN > curl-results/$COUNT-$DOMAIN
+            echo $CURL_RESULT >> curl-results/$COUNT-$DOMAIN
 
             #increment counter
             COUNT=$[COUNT+1]
+            echo "COUNT:$COUNT"
             break
         else
             echo "FAIL $DOMAIN"
