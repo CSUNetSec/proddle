@@ -1,6 +1,6 @@
 #!/bin/bash
-if [ $# -ne 3 ]; then
-    echo "Usage: $0 COUNT USERNAME PASSWORD"
+if [ $# -ne 1 ]; then
+    echo "Usage: $0 COUNT"
     exit 1
 fi
 
@@ -11,13 +11,6 @@ PREFIXES=(
     "https://"
     "http://"
 )
-
-USERNAME=$2
-PASSWORD=$3
-SSL_CA_CERT="/etc/ssl/mongodb/cacert.pem"
-SSL_CERT="/etc/ssl/mongodb/proddle.crt"
-SSL_KEY="/etc/ssl/mongodb/proddle.key"
-MONGO_HOST="mongo1.netsec.colostate.edu"
 
 #download alexa top 1 million domains
 wget -O $TMP_DIR/top-1m.csv.zip http://s3.amazonaws.com/alexa-static/top-1m.csv.zip
@@ -33,14 +26,11 @@ do
     for PREFIX in "${PREFIXES[@]}"; do
         CURL_RESULT=`curl -L $PREFIX$DOMAIN -m 20`
         if [ $? -eq 0 ] && [ ! -z "$CURL_RESULT" ]; then
-            ./../../yogi/target/debug/yogi -c $SSL_CA_CERT -e $SSL_CERT -k $SSL_KEY -u $USERNAME -p $PASSWORD -I $MONGO_HOST operation add http-get $DOMAIN $PREFIX$DOMAIN -t core -t http
             echo "SUCCESS $DOMAIN"
-            echo $PREFIX$DOMAIN > curl-results/$COUNT-$DOMAIN
-            echo $CURL_RESULT >> curl-results/$COUNT-$DOMAIN
+            echo -e "$COUNT\t$DOMAIN\t$PREFIX$DOMAIN" >> curl-results.txt
 
             #increment counter
             COUNT=$[COUNT+1]
-            echo "COUNT:$COUNT"
             break
         else
             echo "FAIL $DOMAIN"
