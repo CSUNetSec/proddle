@@ -13,6 +13,7 @@ extern crate threadpool;
 extern crate time;
 extern crate tokio_core;
 
+use chan::Sender;
 use clap::{App, ArgMatches};
 use proddle::{Error, Measurement};
 use threadpool::ThreadPool;
@@ -153,41 +154,10 @@ pub fn main() {
                                 (tx.clone(), hostname.clone(), ip_address.clone(), thread_measurements_directory.clone());
 
                             thread_pool.execute(move || {
-                                //execute operation and store results in json string
-                                let mut result = format!("{{\"timestamp\":{},\"hostname\":\"{}\",\"ip_address\":\"{}\",\"measurement\":\"{}\",\"domain\":\"{}\",\"url\":\"{}\"",
-                                        time::now_utc().to_timespec().sec,
-                                        pool_hostname,
-                                        pool_ip_address,
-                                        pool_operation_job.operation.measurement,
-                                        pool_operation_job.operation.domain,
-                                        pool_operation_job.operation.url);
-
-                                let mut arguments = Vec::new();
-                                if let Some(parameters) = pool_operation_job.operation.parameters {
-                                    for (key, value) in parameters.iter() {
-                                        arguments.push(format!("--{}=\"{}\"", key, value));
-                                    }
+                                if let Err(e) = execute_measurement(pool_operation_job, &pool_hostname, 
+                                        &pool_ip_address, &pool_measurements_directory, pool_tx) {
+                                    error!("{}", e);
                                 }
-
-                                match Command::new("python")
-                                            .arg(format!("{}/{}", pool_measurements_directory, pool_operation_job.operation.measurement))
-                                            .arg(pool_operation_job.operation.url)
-                                            .args(&arguments)
-                                            .output() {
-                                    Ok(output) => {
-                                        let stderr= String::from_utf8_lossy(&output.stderr);
-                                        match stderr.len() {
-                                            0 => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
-                                            _ => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
-                                        }
-                                    },
-                                    Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
-                                };
-
-                                result.push_str("}");
-
-                                //send result string over result channel
-                                pool_tx.send(result);
                             });
                         } else {
                             break;
@@ -215,4 +185,42 @@ pub fn main() {
 
         std::thread::sleep(std::time::Duration::new(bridge_update_interval_seconds, 0))
     }
+}
+
+fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, measurements_directory: &str, tx: Sender<String>) -> Result<(), Error> {
+    //execute operation and store results in json string
+    let mut result = format!("{{\"timestamp\":{},\"hostname\":\"{}\",\"ip_address\":\"{}\",\"measurement\":\"{}\",\"domain\":\"{}\",\"url\":\"{}\"",
+            time::now_utc().to_timespec().sec,
+            hostname,
+            ip_address,
+            operation_job.operation.measurement,
+            operation_job.operation.domain,
+            operation_job.operation.url);
+
+    let mut arguments = Vec::new();
+    if let Some(parameters) = operation_job.operation.parameters {
+        for (key, value) in parameters.iter() {
+            arguments.push(format!("--{}=\"{}\"", key, value));
+        }
+    }
+
+    match Command::new("python")
+                .arg(format!("{}/{}", measurements_directory, operation_job.operation.measurement))
+                .arg(operation_job.operation.url)
+                .args(&arguments)
+                .output() {
+        Ok(output) => {
+            let stderr= String::from_utf8_lossy(&output.stderr);
+            match stderr.len() {
+                0 => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
+                _ => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
+            }
+        },
+        Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
+    };
+
+    result.push_str("}");
+
+    tx.send(result);
+    Ok(())
 }
