@@ -7,7 +7,7 @@ use mongodb::db::{Database, ThreadedDatabase};
 use proddle::{Measurement, Operation};
 use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
 use proddle::proddle_capnp::proddle::Server;
-use rustc_serialize::json::Json;
+use serde_json;
 
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::{DefaultHasher, Entry};
@@ -214,7 +214,14 @@ impl Server for ServerImpl {
             let json_string = param_result.get_json_string().unwrap();
 
             //parse json string into Bson::Document
-            let json = match Json::from_str(json_string) {
+            /*let json = match Json::from_str(json_string) {
+                Ok(json) => json,
+                Err(e) => {
+                    error!("failed to parse json string '{}' :{}", json_string, e);
+                    continue;
+                },
+            };*/
+            let json = match serde_json::from_str(json_string) {
                 Ok(json) => json,
                 Err(e) => {
                     error!("failed to parse json string '{}' :{}", json_string, e);

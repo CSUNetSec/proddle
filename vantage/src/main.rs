@@ -204,23 +204,38 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
         }
     }
 
-    match Command::new("python")
-                .arg(format!("{}/{}", measurements_directory, operation_job.operation.measurement))
-                .arg(operation_job.operation.url)
-                .args(&arguments)
-                .output() {
-        Ok(output) => {
-            let stderr= String::from_utf8_lossy(&output.stderr);
-            match stderr.len() {
-                0 => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
-                _ => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
-            }
-        },
-        Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
-    };
+        match Command::new("python")
+                    .arg(format!("{}/{}", measurements_directory, operation_job.operation.measurement))
+                    .arg(operation_job.operation.url)
+                    .args(&arguments)
+                    .output() {
+            Ok(output) => {
+                let stderr= String::from_utf8_lossy(&output.stderr);
+                match stderr.len() {
+                    0 => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
+                    _ => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
+                }
+            },
+            Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
+        };
 
-    result.push_str("}");
+        result.push_str("}");
 
-    tx.send(result);
+        /*//parse json string into Bson::Document
+        let json = match Json::from_str(json_string) {
+            Ok(json) => json,
+            Err(e) => {
+                error!("failed to parse json string '{}' :{}", json_string, e);
+                continue;
+            },
+        };
+
+        let document: Document = match Bson::from_json(&json) {
+            Bson::Document(document) => document,
+            _ => cry!(Err(format!("failed to parse json as Bson::Document, {}", json_string))),
+        };*/
+
+        tx.send(result);
+
     Ok(())
 }

@@ -11,7 +11,7 @@ extern crate log;
 extern crate mongodb;
 extern crate proddle;
 extern crate tokio_core;
-extern crate rustc_serialize;
+extern crate serde_json;
 
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;

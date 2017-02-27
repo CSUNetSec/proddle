@@ -4,10 +4,9 @@ version = "0.1.0"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
-bson = "0.3"
+bson = "0.4"
 clap = {version = "2.19", features = ["yaml"]}
-mongodb = {version = "0.2.1", features = ["ssl"]}
+mongodb = {version = "0.2", features = ["ssl"]}
 proddle = {path = "../"}
 rand = "0.3"
-rustc-serialize = "0.3"
 time = "0.1"

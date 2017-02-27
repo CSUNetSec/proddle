@@ -5,7 +5,6 @@ extern crate clap;
 extern crate mongodb;
 extern crate proddle;
 extern crate rand;
-extern crate rustc_serialize;
 extern crate time;
 
 use clap::{App, ArgMatches};
