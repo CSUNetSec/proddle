@@ -1,18 +1,21 @@
-extern crate env_logger;
+extern crate bson;
 extern crate capnp;
 extern crate capnp_rpc;
 #[macro_use]
 extern crate chan;
 #[macro_use]
 extern crate clap;
+extern crate env_logger;
 extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate proddle;
+extern crate serde_json;
 extern crate threadpool;
 extern crate time;
 extern crate tokio_core;
 
+use bson::{Bson, Document};
 use chan::Sender;
 use clap::{App, ArgMatches};
 use proddle::{Error, Measurement};
@@ -188,9 +191,8 @@ pub fn main() {
 }
 
 fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, measurements_directory: &str, tx: Sender<String>) -> Result<(), Error> {
-    //execute operation and store results in json string
-    let mut result = format!("{{\"timestamp\":{},\"hostname\":\"{}\",\"ip_address\":\"{}\",\"measurement\":\"{}\",\"domain\":\"{}\",\"url\":\"{}\"",
-            time::now_utc().to_timespec().sec,
+    //create json prefix
+    let json = format!("{{\"hostname\":\"{}\",\"ip_address\":\"{}\",\"measurement\":\"{}\",\"domain\":\"{}\",\"url\":\"{}\"",
             hostname,
             ip_address,
             operation_job.operation.measurement,
@@ -204,38 +206,57 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
         }
     }
 
-        match Command::new("python")
+    for _ in 0..3 {
+        //execute measurement
+        let mut result_json = match Command::new("python")
                     .arg(format!("{}/{}", measurements_directory, operation_job.operation.measurement))
-                    .arg(operation_job.operation.url)
+                    .arg(&operation_job.operation.url)
                     .args(&arguments)
                     .output() {
             Ok(output) => {
                 let stderr= String::from_utf8_lossy(&output.stderr);
                 match stderr.len() {
-                    0 => result.push_str(&format!(",\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
-                    _ => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", stderr)),
+                    0 => format!("{},\"error\":false,\"result\":{}", json, String::from_utf8_lossy(&output.stdout)),
+                    _ => format!("{},\"error\":true,\"error_message\":\"{}\"", json, stderr),
                 }
             },
-            Err(e) => result.push_str(&format!(",\"error\":true,\"error_message\":\"{}\"", e)),
+            Err(e) => format!("{},\"error\":true,\"error_message\":\"{}\"", json, e),
         };
 
-        result.push_str("}");
+        result_json.push_str(&format!(",\"timestamp\":{}}}", time::now_utc().to_timespec().sec));
 
-        /*//parse json string into Bson::Document
-        let json = match Json::from_str(json_string) {
+        //parse json string into Bson::Document
+        let json = match serde_json::from_str(&result_json) {
             Ok(json) => json,
             Err(e) => {
-                error!("failed to parse json string '{}' :{}", json_string, e);
+                error!("failed to parse json string '{}' :{}", result_json, e);
                 continue;
             },
         };
 
         let document: Document = match Bson::from_json(&json) {
             Bson::Document(document) => document,
-            _ => cry!(Err(format!("failed to parse json as Bson::Document, {}", json_string))),
-        };*/
+            _ => continue,
+        };
 
-        tx.send(result);
+        //check for errors
+        match document.get("result") {
+            Some(&Bson::Document(ref result_document)) => {
+                tx.send(result_json);
+                if let Some(&Bson::Boolean(false)) = result_document.get("error") {
+                    //no error (no retry necessary)
+                    return Ok(())
+                }
+            },
+            _ => {
+                //internal error (no retry necessary)
+                tx.send(result_json);
+                return Ok(())
+            },
+        }
+
+        std::thread::sleep(std::time::Duration::new(10, 0))
+    }
 
     Ok(())
 }
