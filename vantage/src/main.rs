@@ -15,7 +15,7 @@ extern crate threadpool;
 extern crate time;
 extern crate tokio_core;
 
-use bson::{Bson, Document};
+use bson::Bson;
 use chan::Sender;
 use clap::{App, ArgMatches};
 use proddle::{Error, Measurement};
@@ -191,14 +191,7 @@ pub fn main() {
 }
 
 fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, measurements_directory: &str, tx: Sender<String>) -> Result<(), Error> {
-    //create json prefix
-    let json = format!("{{\"hostname\":\"{}\",\"ip_address\":\"{}\",\"measurement\":\"{}\",\"domain\":\"{}\",\"url\":\"{}\"",
-            hostname,
-            ip_address,
-            operation_job.operation.measurement,
-            operation_job.operation.domain,
-            operation_job.operation.url);
-
+    //create measurement arguments
     let mut arguments = Vec::new();
     if let Some(parameters) = operation_job.operation.parameters {
         for (key, value) in parameters.iter() {
@@ -206,53 +199,55 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
         }
     }
 
-    for _ in 0..3 {
-        //execute measurement
-        let mut result_json = match Command::new("python")
-                    .arg(format!("{}/{}", measurements_directory, operation_job.operation.measurement))
-                    .arg(&operation_job.operation.url)
-                    .args(&arguments)
-                    .output() {
+    //execute measurement
+    let common_fields = format!("\"hostname\":\"{}\",\"ip_address\":\"{}\",\"measurement\":\"{}\",\"domain\":\"{}\",\"url\":\"{}\"",
+            hostname,
+            ip_address,
+            operation_job.operation.measurement,
+            operation_job.operation.domain,
+            operation_job.operation.url);
+
+    for i in 0..3 {
+        let timestamp = time::now_utc().to_timespec().sec;
+        let measurement_output = Command::new("python")
+                .arg(format!("{}/{}", measurements_directory, operation_job.operation.measurement))
+                .arg(&operation_job.operation.url)
+                .args(&arguments)
+                .output();
+
+        //gather measurement output
+        let (internal_error, output_fields) = match measurement_output {
             Ok(output) => {
-                let stderr= String::from_utf8_lossy(&output.stderr);
-                match stderr.len() {
-                    0 => format!("{},\"error\":false,\"result\":{}", json, String::from_utf8_lossy(&output.stdout)),
-                    _ => format!("{},\"error\":true,\"error_message\":\"{}\"", json, stderr),
+                match output.stderr.len() {
+                    0 => (false, format!("\"error\":false,\"result\":{}", String::from_utf8_lossy(&output.stdout))),
+                    _ => (true, format!("\"error\":true,\"error_message\":\"{}\"", String::from_utf8_lossy(&output.stderr))),
                 }
             },
-            Err(e) => format!("{},\"error\":true,\"error_message\":\"{}\"", json, e),
+            Err(e) => (true, format!("\"error\":true,\"error_message\":\"{}\"", e)),
         };
-
-        result_json.push_str(&format!(",\"timestamp\":{}}}", time::now_utc().to_timespec().sec));
-
-        //parse json string into Bson::Document
-        let json = match serde_json::from_str(&result_json) {
+        
+        //parse json document
+        let json_string = format!("{{\"timestamp\":{},\"remaining_attempts\":{},{},{}}}", timestamp, 2-i, common_fields, output_fields);
+        let json = match serde_json::from_str(&json_string) {
             Ok(json) => json,
             Err(e) => {
-                error!("failed to parse json string '{}' :{}", result_json, e);
+                error!("failed to parse json string '{}': {}", json_string, e);
                 continue;
             },
         };
 
-        let document: Document = match Bson::from_json(&json) {
-            Bson::Document(document) => document,
-            _ => continue,
-        };
-
-        //check for errors
-        match document.get("result") {
-            Some(&Bson::Document(ref result_document)) => {
-                tx.send(result_json);
-                if let Some(&Bson::Boolean(false)) = result_document.get("error") {
-                    //no error (no retry necessary)
-                    return Ok(())
+        //check if retry required
+        tx.send(json_string);
+        if internal_error {
+            break; //internal error (no retry)
+        } else {
+            if let Bson::Document(document) = Bson::from_json(&json) {
+                if let Some(&Bson::Document(ref result_document)) = document.get("result") {
+                    if let Some(&Bson::Boolean(false)) = result_document.get("error") {
+                        break; //no error in measurement (no retry)
+                    }
                 }
-            },
-            _ => {
-                //internal error (no retry necessary)
-                tx.send(result_json);
-                return Ok(())
-            },
+            }
         }
 
         std::thread::sleep(std::time::Duration::new(10, 0))
