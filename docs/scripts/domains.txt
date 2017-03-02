@@ -1301,7 +1301,7 @@
 1300	eroterest.net	http://www.eroterest.net
 1301	kotaku.com	https://www.kotaku.com
 1302	lightinthebox.com	https://www.lightinthebox.com
-1303	imagetwist.com	https://www.imagetwist.com
+1303	imagetwist.com	http://www.imagetwist.com
 1304	rutor.info	http://www.rutor.info
 1305	xunlei.com	https://www.xunlei.com
 1306	thedailybeast.com	https://www.thedailybeast.com
@@ -2699,7 +2699,7 @@
 2698	gitlab.com	https://www.gitlab.com
 2699	vic.gov.au	https://www.vic.gov.au
 2700	mathsisfun.com	https://www.mathsisfun.com
-2701	myasiantv.se	https://www.myasiantv.se
+2701	myasiantv.se	http://www.myasiantv.se
 2702	bankbazaar.com	https://www.bankbazaar.com
 2703	cox.net	http://www.cox.net
 2704	rai.it	http://www.rai.it
@@ -3307,7 +3307,7 @@
 3306	vppgamingnetwork.com	https://www.vppgamingnetwork.com
 3307	bbb.org	https://www.bbb.org
 3308	gametop.com	http://www.gametop.com
-3309	tinhte.vn	https://www.tinhte.vn
+3309	tinhte.vn	https://tinhte.vn
 3310	idope.se	https://www.idope.se
 3311	walla.co.il	https://www.walla.co.il
 3312	mango.com	https://www.mango.com
@@ -3841,7 +3841,7 @@
 3840	barstoolsports.com	https://www.barstoolsports.com
 3841	genial.guru	https://www.genial.guru
 3842	fas.li	https://fas.li
-3843	ustream.tv	https://www.ustream.tv
+3843	ustream.tv	http://www.ustream.tv
 3844	finanzen.net	https://www.finanzen.net
 3845	shaneless.com	http://www.shaneless.com
 3846	gq.com.tw	http://www.gq.com.tw
@@ -4292,7 +4292,7 @@
 4291	therichest.com	http://www.therichest.com
 4292	hsn.com	https://www.hsn.com
 4293	dawnnews.tv	https://www.dawnnews.tv
-4294	syri.net	https://www.syri.net
+4294	syri.net	http://www.syri.net
 4295	baomoi.com	https://www.baomoi.com
 4296	izlesene.com	https://www.izlesene.com
 4297	turkishairlines.com	https://www.turkishairlines.com
@@ -4681,7 +4681,7 @@
 4680	ipage.com	https://www.ipage.com
 4681	newpost.gr	https://www.newpost.gr
 4682	gencat.cat	https://www.gencat.cat
-4683	tvklan.al	https://www.tvklan.al
+4683	tvklan.al	http://tvklan.al
 4684	artplay.info	http://www.artplay.info
 4685	mangago.me	https://www.mangago.me
 4686	wordhippo.com	http://www.wordhippo.com
@@ -5635,7 +5635,7 @@
 5634	hoortols.org	https://hoortols.org
 5635	instantcheckmate.com	https://www.instantcheckmate.com
 5636	fast.com	https://www.fast.com
-5637	qtestes.com	https://www.qtestes.com
+5637	qtestes.com	http://www.qtestes.com
 5638	lofter.com	https://www.lofter.com
 5639	pdfconverttools.com	http://www.pdfconverttools.com
 5640	azcentral.com	http://www.azcentral.com
@@ -6750,7 +6750,7 @@
 6749	accorhotels.com	http://www.accorhotels.com
 6750	fshare.vn	https://www.fshare.vn
 6751	apk4fun.com	https://www.apk4fun.com
-6752	dfpan.com	http://www.dfpan.com
+6752	dfpan.com	http://www.yunfile.com
 6753	dreamhost.com	https://www.dreamhost.com
 6754	flightclub.com	https://www.flightclub.com
 6755	webdunia.com	http://www.webdunia.com
@@ -7742,7 +7742,7 @@
 7741	searchipdf.com	http://www.searchipdf.com
 7742	somosmexicanos.net	https://www.somosmexicanos.net
 7743	edimdoma.ru	https://www.edimdoma.ru
-7744	oyunkolu.com	https://www.oyunkolu.com
+7744	oyunkolu.com	http://www.oyunkolu.com
 7745	lse.ac.uk	https://www.lse.ac.uk
 7746	freeiconspng.com	http://www.freeiconspng.com
 7747	netzwelt.de	https://www.netzwelt.de
@@ -8661,7 +8661,7 @@
 8660	vodafone.com.tr	https://www.vodafone.com.tr
 8661	usingenglish.com	https://www.usingenglish.com
 8662	mps.it	https://www.mps.it
-8663	zap.co.il	https://www.zap.co.il
+8663	zap.co.il	http://www.zap.co.il
 8664	ilmattino.it	https://www.ilmattino.it
 8665	unionpeer.com	http://www.unionpeer.com
 8666	cinematrix.net	https://www.cinematrix.net
@@ -9775,7 +9775,7 @@
 9774	followone.com	https://www.followone.com
 9775	1kkk.com	http://www.1kkk.com
 9776	tohotheater.jp	https://www.tohotheater.jp
-9777	opinion.al	https://www.opinion.al
+9777	opinion.al	http://opinion.al
 9778	haaretz.com	https://www.haaretz.com
 9779	teamspeak.com	https://www.teamspeak.com
 9780	uesp.net	http://www.uesp.net
