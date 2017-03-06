@@ -14,8 +14,8 @@ SSL_KEY="/etc/ssl/mongodb/proddle.key"
 MONGO_HOST="mongo1.netsec.colostate.edu"
 
 while read LINE; do
-    read RANK DOMAIN URL <<< $LINE
+    read RANK DOMAIN URL RURL <<< $LINE
 
-    echo "$RANK,$DOMAIN,$URL"
-    ./../../yogi/target/debug/yogi -c $SSL_CA_CERT -e $SSL_CERT -k $SSL_KEY -u $USERNAME -p $PASSWORD -I $MONGO_HOST operation add http-get $DOMAIN $URL -t core -t http
+    echo "$RANK,$DOMAIN,$RURL"
+    ./../../yogi/target/debug/yogi -c $SSL_CA_CERT -e $SSL_CERT -k $SSL_KEY -u $USERNAME -p $PASSWORD -I $MONGO_HOST operation add http-get $DOMAIN $RURL -t core -t http
 done <$FILENAME
