@@ -6,10 +6,10 @@ fi
 
 TMP_DIR="/tmp"
 PREFIXES=(
-    "https://www."
-    "http://www."
     "https://"
+    "https://www."
     "http://"
+    "http://www."
 )
 
 #download alexa top 1 million domains
@@ -24,16 +24,18 @@ do
     DOMAIN=`echo $LINE | cut -f 2 -d ','`
 
     for PREFIX in "${PREFIXES[@]}"; do
-        CURL_RESULT=`curl -L $PREFIX$DOMAIN -m 20`
-        if [ $? -eq 0 ] && [ ! -z "$CURL_RESULT" ]; then
-            echo "SUCCESS $DOMAIN"
-            echo -e "$COUNT\t$DOMAIN\t$PREFIX$DOMAIN" >> curl-results.txt
+	CURL_RESULT=`python http-get.py $PREFIX$DOMAIN`
+        if [ $? -eq 0 ] && [ ! -z "$CURL_RESULT" ] && [[ $CURL_RESULT = *\"error\":false* ]]; then
+            URL=`echo $CURL_RESULT | jq '.effective_url' | tr -d '"'`
+            echo "SUCCESS $COUNT : $DOMAIN ($URL)"
+
+            echo -e "$COUNT\t$DOMAIN\t$PREFIX$DOMAIN\t$URL" >> curl-results.txt
 
             #increment counter
             COUNT=$[COUNT+1]
             break
         else
-            echo "FAIL $DOMAIN"
+            echo "FAIL $PREFIX$DOMAIN"
         fi
     done
 
