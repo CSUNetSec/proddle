@@ -10,6 +10,7 @@ extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate proddle;
+extern crate rand;
 extern crate serde_json;
 extern crate threadpool;
 extern crate time;
@@ -19,6 +20,7 @@ use bson::Bson;
 use chan::Sender;
 use clap::{App, ArgMatches};
 use proddle::{Error, Measurement};
+use rand::Rng;
 use threadpool::ThreadPool;
 
 mod operation_job;
@@ -251,7 +253,7 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
             }
         }
 
-        std::thread::sleep(std::time::Duration::new(10, 0))
+        std::thread::sleep(std::time::Duration::new(rand::thread_rng().gen_range(10, 20), 0))
     }
 
     Ok(())
