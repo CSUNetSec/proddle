@@ -13,7 +13,6 @@ env RUST_LOG=info ./bridge
 env RUST_LOG=info ./vantage -H hostname.example.com -I 1.2.3.4
 
 ##TODO
-- parameterize max_attempts in vantage (either command line or operation field)
 - fix error handling in measurement/operation
 - add timestamp to info logging
 - validate hostname and ip address on vantage

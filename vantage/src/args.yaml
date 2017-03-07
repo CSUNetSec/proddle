@@ -57,6 +57,12 @@ args:
         takes_value: true
         default_value: "300"
         help: Seconds interval to attempt to send results.
+    - MAX_RETRIES:
+        short: m
+        long: max_retries
+        takes_value: true
+        default_value: "3"
+        help: Maximum number of retries for each measurement.
     - INCLUDE_TAGS:
         short: t
         long: tag

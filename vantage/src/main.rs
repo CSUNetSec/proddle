@@ -30,7 +30,7 @@ use std::collections::{BinaryHeap, HashMap};
 use std::process::Command;
 use std::sync::{Arc, RwLock};
 
-fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u64, u32, HashMap<&'a str, i64>, Vec<&'a str>), Error> {
+fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u64, u8, u32, HashMap<&'a str, i64>, Vec<&'a str>), Error> {
     let hostname = try!(value_t!(matches, "HOSTNAME", String));
     let ip_address = try!(value_t!(matches, "IP_ADDRESS", String));
     let measurements_directory = try!(value_t!(matches, "MEASUREMENTS_DIRECTORY", String));
@@ -40,6 +40,7 @@ fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u6
     let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
     let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
     let bridge_update_interval_seconds = try!(value_t!(matches.value_of("BRIDGE_UPDATE_INTERVAL_SECONDS"), u64));
+    let max_retries = try!(value_t!(matches.value_of("MAX_RETRIES"), u8));
     let send_results_interval_seconds = try!(value_t!(matches.value_of("SEND_RESULTS_INTERVAL_SECONDS"), u32));
     let include_tags = match matches.values_of("INCLUDE_TAGS") {
         Some(include_tags) => {
@@ -63,7 +64,7 @@ fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u6
     };
 
     Ok((hostname, ip_address, measurements_directory, bucket_count, thread_count, bridge_address, 
-        bridge_update_interval_seconds, send_results_interval_seconds, include_tags, exclude_tags))
+        bridge_update_interval_seconds, max_retries, send_results_interval_seconds, include_tags, exclude_tags))
 }
 
 pub fn main() {
@@ -74,7 +75,7 @@ pub fn main() {
     //initialize vantage parameters
     info!("parsing command line arguments");
     let (hostname, ip_address, measurements_directory, bucket_count, thread_count, bridge_address, 
-         bridge_update_interval_seconds, send_results_interval_seconds, include_tags, exclude_tags) = match parse_args(&matches) {
+         bridge_update_interval_seconds, max_retries, send_results_interval_seconds, include_tags, exclude_tags) = match parse_args(&matches) {
         Ok(args) => args,
         Err(e) => panic!("{}", e),
     };
@@ -158,7 +159,7 @@ pub fn main() {
 
                             thread_pool.execute(move || {
                                 if let Err(e) = execute_measurement(pool_operation_job, &pool_hostname, 
-                                        &pool_ip_address, &pool_measurements_directory, pool_tx) {
+                                        &pool_ip_address, &pool_measurements_directory, max_retries, pool_tx) {
                                     error!("{}", e);
                                 }
                             });
@@ -190,7 +191,7 @@ pub fn main() {
     }
 }
 
-fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, measurements_directory: &str, tx: Sender<String>) -> Result<(), Error> {
+fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, measurements_directory: &str, max_retries: u8, tx: Sender<String>) -> Result<(), Error> {
     //create measurement arguments
     let mut arguments = Vec::new();
     if let Some(parameters) = operation_job.operation.parameters {
@@ -207,7 +208,7 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
             operation_job.operation.domain,
             operation_job.operation.url);
 
-    for i in 0..3 {
+    for i in 0..max_retries {
         let timestamp = time::now_utc().to_timespec().sec;
         let measurement_output = Command::new("python")
                 .arg(format!("{}/{}", measurements_directory, operation_job.operation.measurement))
@@ -227,7 +228,7 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
         };
         
         //parse json document
-        let json_string = format!("{{\"timestamp\":{},\"remaining_attempts\":{},{},{}}}", timestamp, 2-i, common_fields, output_fields);
+        let json_string = format!("{{\"timestamp\":{},\"remaining_attempts\":{},{},{}}}", timestamp, max_retries - 1 - i, common_fields, output_fields);
         let json = match serde_json::from_str(&json_string) {
             Ok(json) => json,
             Err(e) => {
