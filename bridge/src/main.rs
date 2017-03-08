@@ -1,16 +1,18 @@
 extern crate bson;
-extern crate env_logger;
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 #[macro_use]
 extern crate clap;
 extern crate futures;
-#[macro_use]
-extern crate log;
 extern crate mongodb;
 extern crate proddle;
 extern crate tokio_core;
+#[macro_use]
+extern crate slog;
+#[macro_use]
+extern crate slog_scope;
+extern crate slog_term;
 extern crate serde_json;
 
 use capnp_rpc::RpcSystem;
@@ -22,6 +24,7 @@ use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
 use proddle::Error;
 use proddle::proddle_capnp::proddle::ToClient;
+use slog::{DrainExt, Logger};
 use tokio_core::net::TcpListener;
 use tokio_core::io::Io;
 use tokio_core::reactor::Core;
@@ -49,7 +52,7 @@ fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, Stri
 }
 
 pub fn main() {
-    env_logger::init().unwrap();
+    slog_scope::set_global_logger(Logger::root(slog_term::streamer().build().fuse(), o![]));
     let yaml = load_yaml!("args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
 

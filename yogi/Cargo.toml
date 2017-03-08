@@ -1,6 +1,6 @@
 [package]
 name = "yogi"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]

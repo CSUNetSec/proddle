@@ -1,6 +1,6 @@
 [package]
 name = "bridge"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
@@ -8,10 +8,11 @@ bson = "0.4"
 capnp = "0.8"
 capnp-rpc = "0.8"
 clap = {version = "2.19", features = ["yaml"]}
-env_logger = "0.3"
 futures = "0.1"
-log = "0.3"
 mongodb = {version = "0.2", features = ["ssl"]}
 proddle = {path = "../"}
 serde_json = "0.9"
+slog = "1.5"
+slog-scope = "0.2"
+slog-term = "1.5"
 tokio-core = "0.1"

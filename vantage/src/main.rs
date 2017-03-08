@@ -5,12 +5,14 @@ extern crate capnp_rpc;
 extern crate chan;
 #[macro_use]
 extern crate clap;
-extern crate env_logger;
 extern crate futures;
-#[macro_use]
-extern crate log;
 extern crate proddle;
 extern crate rand;
+#[macro_use]
+extern crate slog;
+#[macro_use]
+extern crate slog_scope;
+extern crate slog_term;
 extern crate serde_json;
 extern crate threadpool;
 extern crate time;
@@ -21,6 +23,7 @@ use chan::Sender;
 use clap::{App, ArgMatches};
 use proddle::{Error, Measurement};
 use rand::Rng;
+use slog::{DrainExt, Logger};
 use threadpool::ThreadPool;
 
 mod operation_job;
@@ -70,7 +73,7 @@ fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u6
 }
 
 pub fn main() {
-    env_logger::init().unwrap();
+    slog_scope::set_global_logger(Logger::root(slog_term::streamer().build().fuse(), o![]));
     let yaml = load_yaml!("args.yaml");
     let matches = App::from_yaml(yaml).get_matches();
     
