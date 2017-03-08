@@ -1,5 +1,5 @@
 name: server
-version: "1.0"
+version: "0.2.1"
 author: Daniel Rammer <hamersaw@bushpath.com>
 about: Server deployment for the distributed probing application Proddle.
 args:
@@ -31,16 +31,19 @@ args:
         short: c
         long: ca_file
         takes_value: true
+        default_value: ""
         help: Certificate authority cert file for ssl connection.
     - CERTIFICATE_FILE:
         short: e
         long: cert_file
         takes_value: true
+        default_value: ""
         help: Certificate file for ssl connection.
     - KEY_FILE:
         short: k
         long: key_file
         takes_value: true
+        default_value: ""
         help: Key file for ssl connection.
     - USERNAME:
         short: u

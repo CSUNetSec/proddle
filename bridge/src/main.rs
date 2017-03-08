@@ -75,8 +75,14 @@ pub fn main() {
     let socket = TcpListener::bind(&socket_addr, &handle).unwrap();
 
     //connect to mongodb
-    let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
-    let client = match Client::connect_with_options(&mongodb_ip_address, mongodb_port, client_options)  {
+    let connect_result = if ca_file.eq("") && certificate_file.eq("") && key_file.eq("") {
+        Client::connect(&mongodb_ip_address, mongodb_port)
+    } else {
+        let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
+        Client::connect_with_options(&mongodb_ip_address, mongodb_port, client_options)
+    };
+
+    let client = match connect_result {
         Ok(client) => client,
         Err(e) => panic!("failed to connect to mongodb: {}", e),
     };
