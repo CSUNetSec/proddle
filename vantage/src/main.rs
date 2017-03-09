@@ -184,12 +184,12 @@ fn get_bridge_updates(measurements: &mut HashMap<String, Measurement>, operation
         measurements_directory: &str, bridge_address: &str) -> Result<(), Error> {
     let measurements_updated = try!(client::update_measurements(measurements, measurements_directory, bridge_address)); 
     if measurements_updated > 0 {
-        info!("updated {} measurements", measurements_updated);
+        info!("updated {} measurement(s)", measurements_updated);
     }
 
     let operations_updated = try!(client::update_operations(operations, operation_bucket_hashes, include_tags, exclude_tags, bridge_address));
     if operations_updated > 0 {
-        info!("updated {} operations", operations_updated);
+        info!("updated {} operation(s)", operations_updated);
     }
 
     Ok(())
