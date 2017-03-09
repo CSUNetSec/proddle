@@ -19,7 +19,6 @@ use std::hash::{Hash, Hasher};
 use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
-use std::sync::{Arc, RwLock};
 
 fn open_stream(bridge_address: &str) -> Result<(Core, Client), Error> {
     let mut core = try!(Core::new());
@@ -65,14 +64,13 @@ pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Re
     Ok(())
 }
 
-pub fn update_measurements(measurements: Arc<RwLock<HashMap<String, Measurement>>>, measurements_directory: &str, bridge_address: &str) -> Result<i32, Error> {
+pub fn update_measurements(measurements: &mut HashMap<String, Measurement>, measurements_directory: &str, bridge_address: &str) -> Result<i32, Error> {
     //open stream
     let (mut core, proddle) = try!(open_stream(bridge_address));
 
     //populate get measurements request
     let mut request = proddle.get_measurements_request();
     {
-        let measurements = measurements.read().unwrap();
         let mut request_measurements = request.get().init_measurements(measurements.len() as u32);
         for (i, measurement) in measurements.values().enumerate() {
             let mut request_measurement = request_measurements.borrow().get(i as u32);
@@ -92,7 +90,6 @@ pub fn update_measurements(measurements: Arc<RwLock<HashMap<String, Measurement>
     {
         let result_measurements = try!(try!(response.get()).get_measurements());
         
-        let mut measurements = measurements.write().unwrap();
         for result_measurement in result_measurements.iter() {
             let measurement = try!(Measurement::from_capnproto(&result_measurement));
             if measurement.version == 0 {
@@ -119,18 +116,14 @@ pub fn update_measurements(measurements: Arc<RwLock<HashMap<String, Measurement>
     Ok(measurements_added)
 }
 
-pub fn update_operations(operations: Arc<RwLock<HashMap<u64, BinaryHeap<OperationJob>>>>,
-        operation_bucket_hashes: Arc<RwLock<HashMap<u64, u64>>>,
-        include_tags: &HashMap<&str, i64>,
-        exclude_tags: &Vec<&str>,
-        bridge_address: &str) -> Result<i32, Error> {
+pub fn update_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, operation_bucket_hashes: &mut HashMap<u64, u64>,
+        include_tags: &HashMap<&str, i64>, exclude_tags: &Vec<&str>, bridge_address: &str) -> Result<i32, Error> {
     //open stream
     let (mut core, proddle) = try!(open_stream(bridge_address));
 
     //populate get operations request
     let mut request = proddle.get_operations_request();
     {
-        let operation_bucket_hashes = operation_bucket_hashes.read().unwrap();
         let mut request_bucket_hashes = request.get().init_bucket_hashes(operation_bucket_hashes.len() as u32);
         for (i, (bucket_key, bucket_hash)) in operation_bucket_hashes.iter().enumerate() {
             let mut request_bucket_hash = request_bucket_hashes.borrow().get(i as u32);
@@ -145,9 +138,6 @@ pub fn update_operations(operations: Arc<RwLock<HashMap<u64, BinaryHeap<Operatio
     let response = try!(core.run(request.send().promise));
     {
         let result_operation_buckets = try!(try!(response.get()).get_operation_buckets());
-
-        let mut operations = operations.write().unwrap();
-        let mut operation_bucket_hashes = operation_bucket_hashes.write().unwrap();
         for result_operation_bucket in result_operation_buckets.iter() {
             let mut binary_heap = BinaryHeap::new();
             let mut hasher = DefaultHasher::new();

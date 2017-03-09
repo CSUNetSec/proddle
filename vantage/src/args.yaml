@@ -1,5 +1,5 @@
 name: vantage
-version: "0.2.0"
+version: "0.2.1"
 author: Daniel Rammer <hamersaw@bushpath.com>
 about: Vantage deployment for the distributed probing application Proddle.
 args:
