@@ -2,10 +2,10 @@ use bson::Bson;
 use clap::ArgMatches;
 use mongodb::db::{Database, ThreadedDatabase};
 use proddle;
-use proddle::Error;
+use proddle::ProddleError;
 use time;
 
-pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
+pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
     let domain = try!(value_t!(matches, "DOMAIN", String));
     let url = try!(value_t!(matches, "URL", String));
@@ -48,11 +48,11 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn delete(_: &Database, _: &ArgMatches) -> Result<(), Error> {
+pub fn delete(_: &Database, _: &ArgMatches) -> Result<(), ProddleError> {
     unimplemented!();
 }
 
-pub fn search(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
+pub fn search(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     let domain = try!(value_t!(matches, "DOMAIN", String));
 
     let cursor = try!(proddle::find_operations(db, Some(&domain), None, None, true));

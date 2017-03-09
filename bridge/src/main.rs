@@ -22,7 +22,7 @@ use clap::{App, ArgMatches};
 use futures::{Future, Stream};
 use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
-use proddle::Error;
+use proddle::ProddleError;
 use proddle::proddle_capnp::proddle::ToClient;
 use slog::{DrainExt, Logger};
 use tokio_core::net::TcpListener;
@@ -36,7 +36,7 @@ use server::ServerImpl;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, String, String, String, String), Error> {
+fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, String, String, String, String), ProddleError> {
     let bridge_ip_address = try!(value_t!(matches, "BRIDGE_IP_ADDRESS", String));
     let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
     let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);

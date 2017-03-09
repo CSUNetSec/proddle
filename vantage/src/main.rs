@@ -18,7 +18,7 @@ extern crate time;
 extern crate tokio_core;
 
 use clap::{App, ArgMatches};
-use proddle::{Error, Measurement};
+use proddle::{ProddleError, Measurement};
 use slog::{DrainExt, Logger};
 
 mod client;
@@ -30,7 +30,7 @@ use operation_job::OperationJob;
 
 use std::collections::{BinaryHeap, HashMap};
 
-fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u32, u8, u32, HashMap<&'a str, i64>, Vec<&'a str>), Error> {
+fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u32, u8, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
     let hostname = try!(value_t!(matches, "HOSTNAME", String));
     let ip_address = try!(value_t!(matches, "IP_ADDRESS", String));
     let measurements_directory = try!(value_t!(matches, "MEASUREMENTS_DIRECTORY", String));
@@ -150,7 +150,7 @@ pub fn main() {
     }
 }
 
-fn execute_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, executor: &mut Executor) -> Result<(), Error> {
+fn execute_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, executor: &mut Executor) -> Result<(), ProddleError> {
     let now = time::now_utc().to_timespec().sec;
 
     //iterate over buckets of operation jobs
@@ -181,7 +181,7 @@ fn execute_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, e
 
 fn get_bridge_updates(measurements: &mut HashMap<String, Measurement>, operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, 
         operation_bucket_hashes: &mut HashMap<u64, u64>, include_tags: &HashMap<&str, i64>, exclude_tags: &Vec<&str>, 
-        measurements_directory: &str, bridge_address: &str) -> Result<(), Error> {
+        measurements_directory: &str, bridge_address: &str) -> Result<(), ProddleError> {
     let measurements_updated = try!(client::update_measurements(measurements, measurements_directory, bridge_address)); 
     if measurements_updated > 0 {
         info!("updated {} measurement(s)", measurements_updated);

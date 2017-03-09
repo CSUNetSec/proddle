@@ -12,7 +12,7 @@ pub mod proddle_capnp {
     include!(concat!(env!("OUT_DIR"), "/proddle_capnp.rs"));
 }
 
-pub use self::error::Error;
+pub use self::error::ProddleError;
 pub use self::measurement::Measurement;
 pub use self::operation::Operation;
 
@@ -51,11 +51,11 @@ pub fn get_bucket_key(map: &BTreeMap<u64, DefaultHasher>, key: u64) -> Option<u6
 /*
  * MongoDB
  */
-pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, Error> {
+pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, ProddleError> {
     Ok(try!(Client::connect(host, port)))
 }
 
-pub fn find_measurement(db: &Database, measurement_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, Error> {
+pub fn find_measurement(db: &Database, measurement_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, ProddleError> {
     //create search document
     let search_document = match version {
         Some(search_version) => Some(doc! { "name" => measurement_name, "version" => search_version }),
@@ -89,7 +89,7 @@ pub fn find_measurement(db: &Database, measurement_name: &str, version: Option<i
     Ok(try!(db.collection("measurements").find_one(search_document, find_options)))
 }
 
-pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i64>, order_by_version: bool) -> Result<Cursor, Error> {
+pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version: Option<i32>, limit: Option<i64>, order_by_version: bool) -> Result<Cursor, ProddleError> {
     //create search document
     let search_document = match measurement_name {
         Some(search_measurement_name) => {
@@ -133,7 +133,7 @@ pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version:
     Ok(try!(db.collection("measurements").find(search_document, find_options)))
 }
 
-pub fn find_operation(db: &Database, domain: &str, measurement_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, Error> {
+pub fn find_operation(db: &Database, domain: &str, measurement_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, ProddleError> {
     //create search document
     let search_document = match measurement_name {
         Some(search_measurement_name) => Some(doc! { "domain" => domain, "measurement" => search_measurement_name }),
@@ -167,7 +167,7 @@ pub fn find_operation(db: &Database, domain: &str, measurement_name: Option<&str
     Ok(try!(db.collection("operations").find_one(search_document, find_options)))
 }
 
-pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i64>, order_by_timestamp: bool) -> Result<Cursor, Error> {
+pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Option<&str>, limit: Option<i64>, order_by_timestamp: bool) -> Result<Cursor, ProddleError> {
     //create search document
     let search_document = match domain {
         Some(domain) => {

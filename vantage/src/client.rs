@@ -3,7 +3,7 @@ use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use futures::Future;
-use proddle::{Error, Measurement, Operation};
+use proddle::{ProddleError, Measurement, Operation};
 use proddle::proddle_capnp::proddle::Client;
 use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
@@ -20,7 +20,7 @@ use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-fn open_stream(bridge_address: &str) -> Result<(Core, Client), Error> {
+fn open_stream(bridge_address: &str) -> Result<(Core, Client), ProddleError> {
     let mut core = try!(Core::new());
     let handle = core.handle();
                         
@@ -38,7 +38,7 @@ fn open_stream(bridge_address: &str) -> Result<(Core, Client), Error> {
     Ok((core, proddle))
 }
 
-pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Result<(), Error> {
+pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Result<(), ProddleError> {
     //open stream
     let (mut core, proddle) = try!(open_stream(bridge_address));
 
@@ -64,7 +64,7 @@ pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Re
     Ok(())
 }
 
-pub fn update_measurements(measurements: &mut HashMap<String, Measurement>, measurements_directory: &str, bridge_address: &str) -> Result<i32, Error> {
+pub fn update_measurements(measurements: &mut HashMap<String, Measurement>, measurements_directory: &str, bridge_address: &str) -> Result<i32, ProddleError> {
     //open stream
     let (mut core, proddle) = try!(open_stream(bridge_address));
 
@@ -117,7 +117,7 @@ pub fn update_measurements(measurements: &mut HashMap<String, Measurement>, meas
 }
 
 pub fn update_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, operation_bucket_hashes: &mut HashMap<u64, u64>,
-        include_tags: &HashMap<&str, i64>, exclude_tags: &Vec<&str>, bridge_address: &str) -> Result<i32, Error> {
+        include_tags: &HashMap<&str, i64>, exclude_tags: &Vec<&str>, bridge_address: &str) -> Result<i32, ProddleError> {
     //open stream
     let (mut core, proddle) = try!(open_stream(bridge_address));
 

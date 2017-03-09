@@ -2,13 +2,13 @@ use bson::Bson;
 use clap::ArgMatches;
 use mongodb::db::{Database, ThreadedDatabase};
 use proddle;
-use proddle::Error;
+use proddle::ProddleError;
 use time;
 
 use std::fs::File;
 use std::io::Read;
 
-pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
+pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     let file = try!(value_t!(matches, "FILE", String));
     let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
     let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
@@ -62,11 +62,11 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn delete(_: &Database, _: &ArgMatches) -> Result<(), Error> {
+pub fn delete(_: &Database, _: &ArgMatches) -> Result<(), ProddleError> {
     unimplemented!();
 }
 
-pub fn search(db: &Database, matches: &ArgMatches) -> Result<(), Error> {
+pub fn search(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
     
     let cursor = try!(proddle::find_measurements(db, Some(&measurement_name), None, Some(1), true));

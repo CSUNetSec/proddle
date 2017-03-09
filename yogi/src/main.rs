@@ -10,12 +10,12 @@ extern crate time;
 use clap::{App, ArgMatches};
 use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
-use proddle::Error;
+use proddle::ProddleError;
 
 mod measurement;
 mod operation;
 
-fn parse_args(matches: &ArgMatches) -> Result<(String, u16, String, String, String, String, String), Error> {
+fn parse_args(matches: &ArgMatches) -> Result<(String, u16, String, String, String, String, String), ProddleError> {
     let mongodb_ip_address = try!(value_t!(matches, "MONGODB_IP_ADDRESS", String));
     let mongodb_port = try!(value_t!(matches.value_of("MONGODB_PORT"), u16));
     let ca_file = try!(value_t!(matches.value_of("CA_FILE"), String));

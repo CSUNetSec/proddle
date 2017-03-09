@@ -1,6 +1,6 @@
 use bson::Bson;
 use chan::{self, Sender};
-use proddle::Error;
+use proddle::ProddleError;
 use rand::{self, Rng};
 use serde_json;
 use time;
@@ -35,13 +35,13 @@ impl Executor {
         }
     }
 
-    pub fn execute_operation(&mut self, operation_job: OperationJob) -> Result<(), Error> {
+    pub fn execute_operation(&mut self, operation_job: OperationJob) -> Result<(), ProddleError> {
         self.operation_tx.send(operation_job);
         Ok(())
     }
 }
 
-fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, measurements_directory: &str, max_retries: u8, tx: Sender<String>) -> Result<(), Error> {
+fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, measurements_directory: &str, max_retries: u8, tx: Sender<String>) -> Result<(), ProddleError> {
     //create measurement arguments
     let mut arguments = Vec::new();
     if let Some(parameters) = operation_job.operation.parameters {
