@@ -1,5 +1,5 @@
 name: server
-version: "0.2.1"
+version: "0.2.2"
 author: Daniel Rammer <hamersaw@bushpath.com>
 about: Server deployment for the distributed probing application Proddle.
 args:

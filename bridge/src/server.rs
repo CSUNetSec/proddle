@@ -37,7 +37,6 @@ impl ServerImpl {
 
 impl Server for ServerImpl {
     fn get_measurements(&mut self, params: GetMeasurementsParams<>, mut results: GetMeasurementsResults<>) -> Promise<(), capnp::Error> {
-        info!("received get_measurements request");
         let param_measurements = pry!(pry!(params.get()).get_measurements());
         
         //iterate over measurements in mongodb and store in measurements map
@@ -118,11 +117,13 @@ impl Server for ServerImpl {
             }
         }
 
+        if measurements.len() != 0 {
+            info!("updated {} measurement(s) in reply", measurements.len());
+        }
         Promise::ok(())
     }
 
     fn get_operations(&mut self, params: GetOperationsParams<>, mut results: GetOperationsResults<>) -> Promise<(), capnp::Error> {
-        info!("received get_operations request");
         let param_bucket_hashes = pry!(pry!(params.get()).get_bucket_hashes());
 
         //initialize bridge side bucket hashes
@@ -202,25 +203,21 @@ impl Server for ServerImpl {
             }
         }
 
+        if operations.len() != 0 {
+            info!("updated {} operation bucket(s) in reply", operations.len());
+        }
         Promise::ok(())
     }
 
     fn send_results(&mut self, params: SendResultsParams<>, _: SendResultsResults<>) -> Promise<(), capnp::Error> {
-        info!("received send_results request");
         let param_results = pry!(pry!(params.get()).get_results());
 
         //iterate over results
+        let mut count = 0;
         for param_result in param_results.iter() {
             let json_string = param_result.get_json_string().unwrap();
 
             //parse json string into Bson::Document
-            /*let json = match Json::from_str(json_string) {
-                Ok(json) => json,
-                Err(e) => {
-                    error!("failed to parse json string '{}' :{}", json_string, e);
-                    continue;
-                },
-            };*/
             let json = match serde_json::from_str(json_string) {
                 Ok(json) => json,
                 Err(e) => {
@@ -238,8 +235,11 @@ impl Server for ServerImpl {
             if let Err(e) = self.mongodb_db.collection("results").insert_one(document, None) {
                 error!("{}", e);
             }
+
+            count += 1;
         }
 
+        info!("handled {} results", count);
         Promise::ok(())
     }
 }
