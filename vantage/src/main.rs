@@ -102,7 +102,7 @@ pub fn main() {
     }
 
     //start recv result channel
-    let (result_tx, result_rx) = chan::sync(0);
+    let (result_tx, result_rx) = chan::sync(50);
     let thread_bridge_address = bridge_address.clone();
     std::thread::spawn(move || {
         let mut result_buffer: Vec<String> = Vec::new();
