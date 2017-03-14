@@ -20,8 +20,6 @@ use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::{App, ArgMatches};
 use futures::{Future, Stream};
-use mongodb::{Client, ClientOptions, ThreadedClient};
-use mongodb::db::ThreadedDatabase;
 use proddle::ProddleError;
 use proddle::proddle_capnp::proddle::ToClient;
 use slog::{DrainExt, Logger};
@@ -74,27 +72,19 @@ pub fn main() {
     let handle = core.handle();
     let socket = TcpListener::bind(&socket_addr, &handle).unwrap();
 
-    //connect to mongodb
-    let connect_result = if ca_file.eq("") && certificate_file.eq("") && key_file.eq("") {
-        Client::connect(&mongodb_ip_address, mongodb_port)
-    } else {
-        let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
-        Client::connect_with_options(&mongodb_ip_address, mongodb_port, client_options)
-    };
-
-    let client = match connect_result {
-        Ok(client) => client,
-        Err(e) => panic!("failed to connect to mongodb: {}", e),
-    };
-
-    let db = client.db("proddle");
-    if let Err(e) = db.auth(&username, &password) {
-        panic!("{}", e);
-    }
-
     //initialize proddle bridge
     info!("initializing bridge data strucutes");
-    let proddle = ToClient::new(ServerImpl::new(db)).from_server::<capnp_rpc::Server>();
+    let proddle = ToClient::new(
+        ServerImpl::new(
+            mongodb_ip_address,
+            mongodb_port,
+            username,
+            password,
+            ca_file,
+            certificate_file,
+            key_file,
+        )
+    ).from_server::<capnp_rpc::Server>();
     
     //start rpc loop
     info!("service started");

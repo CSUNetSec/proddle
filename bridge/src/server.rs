@@ -3,8 +3,9 @@ extern crate proddle;
 
 use bson::{self, Bson, Document};
 use capnp::capability::Promise;
+use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::{Database, ThreadedDatabase};
-use proddle::{Measurement, Operation};
+use proddle::{Measurement, Operation, ProddleError};
 use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
 use proddle::proddle_capnp::proddle::Server;
 use serde_json;
@@ -24,24 +25,39 @@ macro_rules! cry {
 }
 
 pub struct ServerImpl {
-    mongodb_db: Database,
+    mongodb_ip_address: String,
+    mongodb_port: u16,
+    username: String,
+    password: String,
+    ca_file: String,
+    certificate_file: String,
+    key_file: String,
 }
 
 impl ServerImpl {
-    pub fn new(mongodb_db: Database) -> ServerImpl {
+    pub fn new(mongodb_ip_address: String, mongodb_port: u16, username: String, password: String, 
+            ca_file: String, certificate_file: String, key_file: String) -> ServerImpl {
         ServerImpl {
-            mongodb_db: mongodb_db,
+            mongodb_ip_address: mongodb_ip_address,
+            mongodb_port: mongodb_port,
+            username: username,
+            password: password,
+            ca_file: ca_file,
+            certificate_file: certificate_file,
+            key_file: key_file,
         }
     }
 }
 
 impl Server for ServerImpl {
     fn get_measurements(&mut self, params: GetMeasurementsParams<>, mut results: GetMeasurementsResults<>) -> Promise<(), capnp::Error> {
+        let proddle_db = cry!(open_mongodb_connection(&self.mongodb_ip_address, self.mongodb_port, 
+            &self.username, &self.password, &self.ca_file, &self.certificate_file, &self.key_file));
         let param_measurements = pry!(pry!(params.get()).get_measurements());
         
         //iterate over measurements in mongodb and store in measurements map
         let mut measurements = HashMap::new();
-        let cursor = cry!(proddle::find_measurements(&self.mongodb_db, None, None, None, false));
+        let cursor = cry!(proddle::find_measurements(&proddle_db, None, None, None, false));
         for document in cursor {
             let document = cry!(document);
 
@@ -124,6 +140,8 @@ impl Server for ServerImpl {
     }
 
     fn get_operations(&mut self, params: GetOperationsParams<>, mut results: GetOperationsResults<>) -> Promise<(), capnp::Error> {
+        let proddle_db = cry!(open_mongodb_connection(&self.mongodb_ip_address, self.mongodb_port, 
+            &self.username, &self.password, &self.ca_file, &self.certificate_file, &self.key_file));
         let param_bucket_hashes = pry!(pry!(params.get()).get_bucket_hashes());
 
         //initialize bridge side bucket hashes
@@ -135,7 +153,7 @@ impl Server for ServerImpl {
         }
         
         //iterate over operations in mongodb and store in operations map
-        let cursor = cry!(proddle::find_operations(&self.mongodb_db, None, None, None, false));
+        let cursor = cry!(proddle::find_operations(&proddle_db, None, None, None, false));
         for document in cursor {
             let document = cry!(document);
 
@@ -210,6 +228,8 @@ impl Server for ServerImpl {
     }
 
     fn send_results(&mut self, params: SendResultsParams<>, _: SendResultsResults<>) -> Promise<(), capnp::Error> {
+        let proddle_db = cry!(open_mongodb_connection(&self.mongodb_ip_address, self.mongodb_port, 
+            &self.username, &self.password, &self.ca_file, &self.certificate_file, &self.key_file));
         let param_results = pry!(pry!(params.get()).get_results());
 
         //iterate over results
@@ -232,7 +252,7 @@ impl Server for ServerImpl {
             };
 
             //insert document
-            if let Err(e) = self.mongodb_db.collection("results").insert_one(document, None) {
+            if let Err(e) = proddle_db.collection("results").insert_one(document, None) {
                 error!("{}", e);
             }
 
@@ -242,4 +262,18 @@ impl Server for ServerImpl {
         info!("handled {} results", count);
         Promise::ok(())
     }
+}
+
+fn open_mongodb_connection(mongodb_ip_address: &str, mongodb_port: u16, username: &str, password: &str, 
+        ca_file: &str, certificate_file: &str, key_file: &str) -> Result<Database, ProddleError> {
+    let client = if ca_file.eq("") && certificate_file.eq("") && key_file.eq("") {
+        try!(Client::connect(&mongodb_ip_address, mongodb_port))
+    } else {
+        let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
+        try!(Client::connect_with_options(&mongodb_ip_address, mongodb_port, client_options))
+    };
+
+    let db = client.db("proddle");
+    try!(db.auth(&username, &password));
+    Ok(db)
 }
