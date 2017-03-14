@@ -17,16 +17,16 @@ struct Parameter {
 }
 
 struct Measurement {
-    timestamp @0 :UInt64;
+    timestamp @0 :Int64;
     name @1 :Text;
-    version @2 :UInt16;
+    version @2 :Int32;
     parameters @3: List(Parameter);
     dependencies @4 :List(Text);
     content @5 :Text;
 }
 
 struct Operation {
-    timestamp @0 :UInt64;
+    timestamp @0 :Int64;
     measurement @1 :Text;
     domain @2 :Text;
     url @3 :Text;

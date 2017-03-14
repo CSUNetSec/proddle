@@ -6,7 +6,7 @@ use std::hash::{Hash, Hasher};
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Operation {
-    pub timestamp: Option<u64>,
+    pub timestamp: Option<i64>,
     pub measurement: String,
     pub domain: String,
     pub url: String,

@@ -1,8 +1,7 @@
-use bson::Bson;
+use bson::{self, Bson};
 use clap::ArgMatches;
 use mongodb::db::{Database, ThreadedDatabase};
-use proddle;
-use proddle::ProddleError;
+use proddle::{self, Measurement, Parameter, ProddleError};
 use time;
 
 use std::fs::File;
@@ -11,24 +10,30 @@ use std::io::Read;
 pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     let file = try!(value_t!(matches, "FILE", String));
     let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
-    let parameters: Vec<Bson> = match matches.values_of("PARAMETER") {
+    let parameters: Option<Vec<Parameter>> = match matches.values_of("PARAMETER") {
         Some(parameters) => {
             let mut params = Vec::new();
             for parameter in parameters {
                 let mut split_values = parameter.split("|");
                 let name = try!(split_values.nth(0).ok_or("failed to parse parameter name")).to_owned();
                 let value = try!(split_values.nth(0).ok_or("failed to parse parameter value")).to_owned();
-                params.push(Bson::Document(doc!("name" => name, "value" => value)));
+
+                params.push(
+                    Parameter {
+                        name: name,
+                        value: value,
+                    }
+                );
             }
 
-            params
+            Some(params)
         },
-        None => Vec::new(),
+        None => None,
     };
 
-    let dependencies: Vec<Bson> = match matches.values_of("DEPENDENCY") {
-        Some(dependencies) => dependencies.map(|x| Bson::String(x.to_owned())).collect(),
-        None => Vec::new(),
+    let dependencies: Option<Vec<String>> = match matches.values_of("DEPENDENCY") {
+        Some(dependencies) => Some(dependencies.map(|x| x.to_owned()).collect()),
+        None => None,
     };
 
     let version = match proddle::find_measurement(db, &measurement_name, None, true) {
@@ -47,18 +52,23 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     try!(file.read_to_string(&mut buffer));
 
     //create measurement document
-    let timestamp = time::now_utc().to_timespec().sec;
-    let document = doc!( 
-        "timestamp" => timestamp,
-        "name" => measurement_name,
-        "version" => version,
-        "parameters" => parameters,
-        "dependencies" => dependencies,
-        "content" => buffer
-    );
+    let timestamp = Some(time::now_utc().to_timespec().sec);
+    let measurement = Measurement {
+        timestamp: timestamp,
+        name: measurement_name,
+        version: version,
+        parameters: parameters,
+        dependencies: dependencies,
+        content: Some(buffer),
+    };
 
     //insert document
-    try!(db.collection("measurements").insert_one(document, None));
+    if let Bson::Document(document) = try!(bson::to_bson(&measurement)) {
+        try!(db.collection("measurements").insert_one(document, None));
+    } else {
+        return Err(ProddleError::from("failed to parse Measurement into OrdererdDocument"));
+    }
+
     Ok(())
 }
 

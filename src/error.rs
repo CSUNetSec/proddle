@@ -1,3 +1,4 @@
+extern crate bson;
 extern crate capnp;
 extern crate clap;
 extern crate mongodb;
@@ -8,11 +9,12 @@ use std::fmt::{Display, Formatter, Result};
 #[derive(Debug)]
 pub enum ProddleError {
     AddrParse(std::net::AddrParseError),
-    ParseIntError(std::num::ParseIntError),
     Capnp(capnp::Error),
     Clap(clap::Error),
+    EncoderError(bson::EncoderError),
     Io(std::io::Error),
     MongoDB(mongodb::Error),
+    ParseIntError(std::num::ParseIntError),
     Proddle(String),
 }
 
@@ -20,11 +22,12 @@ impl Display for ProddleError {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match *self {
             ProddleError::AddrParse(ref err) => write!(f, "AddrParseError: {}", err),
-            ProddleError::ParseIntError(ref err) => write!(f, "ParseIntError: {}", err),
             ProddleError::Capnp(ref err) => write!(f, "CapnpError: {}", err),
             ProddleError::Clap(ref err) => write!(f, "ClapError: {}", err),
+            ProddleError::EncoderError(ref err) => write!(f, "EncoderError: {}", err),
             ProddleError::Io(ref err) => write!(f, "IoError: {}", err),
             ProddleError::MongoDB(ref err) => write!(f, "MongoDBError: {}", err),
+            ProddleError::ParseIntError(ref err) => write!(f, "ParseIntError: {}", err),
             ProddleError::Proddle(ref err) => write!(f, "ProddleError: {}", err),
         }
     }
@@ -33,12 +36,6 @@ impl Display for ProddleError {
 impl From<std::net::AddrParseError> for ProddleError {
     fn from(err: std::net::AddrParseError) -> ProddleError {
         ProddleError::AddrParse(err)
-    }
-}
-
-impl From<std::num::ParseIntError> for ProddleError {
-    fn from(err: std::num::ParseIntError) -> ProddleError {
-        ProddleError::ParseIntError(err)
     }
 }
 
@@ -54,6 +51,12 @@ impl From<clap::Error> for ProddleError {
     }
 }
 
+impl From<bson::EncoderError> for ProddleError {
+    fn from(err: bson::EncoderError) -> ProddleError {
+        ProddleError::EncoderError(err)
+    }
+}
+
 impl From<std::io::Error> for ProddleError {
     fn from(err: std::io::Error) -> ProddleError {
         ProddleError::Io(err)
@@ -63,6 +66,12 @@ impl From<std::io::Error> for ProddleError {
 impl From<mongodb::Error> for ProddleError {
     fn from(err: mongodb::Error) -> ProddleError {
         ProddleError::MongoDB(err)
+    }
+}
+
+impl From<std::num::ParseIntError> for ProddleError {
+    fn from(err: std::num::ParseIntError) -> ProddleError {
+        ProddleError::ParseIntError(err)
     }
 }
 

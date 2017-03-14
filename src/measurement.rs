@@ -4,16 +4,16 @@ use proddle_capnp;
 
 #[derive(Deserialize, Serialize)]
 pub struct Measurement {
-    pub timestamp: Option<u64>,
+    pub timestamp: Option<i64>,
     pub name: String,
-    pub version: u16,
+    pub version: i32,
     pub parameters: Option<Vec<Parameter>>,
     pub dependencies: Option<Vec<String>>,
     pub content: Option<String>,
 }
 
 impl Measurement {
-    pub fn new(timestamp: Option<u64>, name: String, version: u16, parameters: Option<Vec<Parameter>>, dependencies: Option<Vec<String>>, content: Option<String>) -> Measurement {
+    pub fn new(timestamp: Option<i64>, name: String, version: i32, parameters: Option<Vec<Parameter>>, dependencies: Option<Vec<String>>, content: Option<String>) -> Measurement {
         Measurement {
             timestamp: timestamp,
             name: name,

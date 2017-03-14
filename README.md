@@ -13,7 +13,6 @@ env RUST_LOG=info ./bridge
 env RUST_LOG=info ./vantage -H hostname.example.com -I 1.2.3.4
 
 ##TODO
-- use Measurement/Operation in yogi
 - validate hostname and ip address on vantage
 - validate module scripts before they're uploaded
 - use pip3 to install dependencies of modules

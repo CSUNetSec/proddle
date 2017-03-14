@@ -1,6 +1,6 @@
 [package]
 name = "proddle"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 build = "build.rs"
 
