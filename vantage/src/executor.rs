@@ -45,8 +45,8 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
     //create measurement arguments
     let mut arguments = Vec::new();
     if let Some(parameters) = operation_job.operation.parameters {
-        for (key, value) in parameters.iter() {
-            arguments.push(format!("--{}=\"{}\"", key, value));
+        for parameter in parameters {
+            arguments.push(format!("--{}=\"{}\"", parameter.name, parameter.value));
         }
     }
 
