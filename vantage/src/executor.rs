@@ -22,7 +22,14 @@ impl Executor {
             let (t_hostname, t_ip_address, t_measurements_directory, t_result_tx) = (hostname.to_owned(), ip_address.to_owned(), measurements_directory.to_owned(), result_tx.clone());
             let _ = std::thread::spawn(move || {
                 loop {
-                    let operation_job = thread_operation_rx.recv().unwrap();
+                    let operation_job = match thread_operation_rx.recv() {
+                        Some(operation_job) => operation_job,
+                        None => {
+                            warn!("executor thread recv 'None' operation job");
+                            continue;
+                        },
+                    };
+
                     if let Err(e) = execute_measurement(operation_job, &t_hostname, &t_ip_address, &t_measurements_directory, max_retries, t_result_tx.clone()) {
                         error!("{}", e);
                     }

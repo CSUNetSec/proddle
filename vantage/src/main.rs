@@ -137,13 +137,13 @@ pub fn main() {
         chan_select! {
             execute_operations_tick.recv() => {
                 if let Err(e) = execute_operations(&mut operations, &mut executor) {
-                    panic!("{}", e);
+                    error!("{}", e);
                 }
             },
             bridge_update_tick.recv() => {
                 if let Err(e) = get_bridge_updates(&mut measurements, &mut operations, &mut operation_bucket_hashes, 
                         &include_tags, &exclude_tags, &measurements_directory, &bridge_address) {
-                    panic!("{}", e);
+                    error!("{}", e);
                 }
             }
         }
@@ -163,7 +163,14 @@ fn execute_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, e
 
             //if the next execution time is earlier then the current time then execute
             if execution_time < now {
-                let mut operation_job = operation_jobs.pop().unwrap();
+                let mut operation_job = match operation_jobs.pop() {
+                    Some(operation_job) => operation_job,
+                    None => {
+                        warn!("execute_operations() 'pop' a 'None' value from operation_jobs");
+                        continue;
+                    },
+                };
+
                 let pool_operation_job = operation_job.clone();
                 operation_job.execution_time += operation_job.interval;
                 operation_jobs.push(operation_job);
