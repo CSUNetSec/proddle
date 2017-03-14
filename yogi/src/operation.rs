@@ -16,7 +16,7 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
                 let mut split_values = parameter.split("|");
                 let name = try!(split_values.nth(0).ok_or("failed to parse parameter name")).to_owned();
                 let value = try!(split_values.nth(0).ok_or("failed to parse parameter value")).to_owned();
-                params.push(Bson::Document(doc! {"name" => name, "value" => value}));
+                params.push(Bson::Document(doc!("name" => name, "value" => value)));
             }
 
             params
@@ -34,14 +34,14 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
 
     //create opeation document
     let timestamp = time::now_utc().to_timespec().sec;
-    let document = doc! {
+    let document = doc!(
         "timestamp" => timestamp,
         "measurement" => measurement_name,
         "domain" => domain,
         "url" => url,
         "parameters" => parameters,
         "tags" => tags
-    };
+    );
 
     //insert document
     try!(db.collection("operations").insert_one(document, None));

@@ -58,14 +58,14 @@ pub fn get_mongodb_client(host: &str, port: u16) -> Result<Client, ProddleError>
 pub fn find_measurement(db: &Database, measurement_name: &str, version: Option<i32>, order_by_version: bool) -> Result<Option<OrderedDocument>, ProddleError> {
     //create search document
     let search_document = match version {
-        Some(search_version) => Some(doc! { "name" => measurement_name, "version" => search_version }),
-        None => Some(doc! { "name" => measurement_name }),
+        Some(search_version) => Some(doc!("name" => measurement_name, "version" => search_version)),
+        None => Some(doc!("name" => measurement_name)),
     };
 
     //create find options
     let negative_one = -1;
     let sort_document = match order_by_version {
-        true => Some(doc! { "version" => negative_one }),
+        true => Some(doc!("version" => negative_one)),
         false => None,
     };
 
@@ -94,13 +94,13 @@ pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version:
     let search_document = match measurement_name {
         Some(search_measurement_name) => {
             match version {
-                Some(search_version) => Some(doc! { "name" => search_measurement_name, "version" => search_version }),
-                None => Some(doc! { "name" => search_measurement_name }),
+                Some(search_version) => Some(doc!("name" => search_measurement_name, "version" => search_version)),
+                None => Some(doc!("name" => search_measurement_name)),
             }
         },
         None => {
             match version {
-                Some(search_version) => Some(doc! { "version" => search_version }),
+                Some(search_version) => Some(doc!("version" => search_version)),
                 None => None,
             }
         },
@@ -109,7 +109,7 @@ pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version:
     //create find options
     let negative_one = -1;
     let sort_document = match order_by_version {
-        true => Some(doc! { "version" => negative_one }),
+        true => Some(doc!("version" => negative_one)),
         false => None,
     };
 
@@ -136,15 +136,15 @@ pub fn find_measurements(db: &Database, measurement_name: Option<&str>, version:
 pub fn find_operation(db: &Database, domain: &str, measurement_name: Option<&str>, order_by_timestamp: bool) -> Result<Option<OrderedDocument>, ProddleError> {
     //create search document
     let search_document = match measurement_name {
-        Some(search_measurement_name) => Some(doc! { "domain" => domain, "measurement" => search_measurement_name }),
-        None => Some(doc! { "domain" => domain }),
+        Some(search_measurement_name) => Some(doc!("domain" => domain, "measurement" => search_measurement_name)),
+        None => Some(doc!("domain" => domain)),
     };
 
     //create find options
     let negative_one = -1;
     let sort_document = match order_by_timestamp {
-        true => Some(doc! { "timestamp" => negative_one }),
-        false => Some(doc! { "_id" => 1 }),
+        true => Some(doc!("timestamp" => negative_one)),
+        false => Some(doc!("_id" => 1)),
     };
 
     let find_options = Some(FindOptions {
@@ -172,13 +172,13 @@ pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Op
     let search_document = match domain {
         Some(domain) => {
             match measurement_name {
-                Some(search_measurement_name) => Some(doc! { "domain" => domain, "measurement" => search_measurement_name }),
-                None => Some(doc! { "domain" => domain }),
+                Some(search_measurement_name) => Some(doc!("domain" => domain, "measurement" => search_measurement_name)),
+                None => Some(doc!("domain" => domain)),
             }
         },
         None => {
             match measurement_name {
-                Some(search_measurement_name) => Some(doc! { "measurement" => search_measurement_name }),
+                Some(search_measurement_name) => Some(doc!("measurement" => search_measurement_name)),
                 None => None,
             }
         }
@@ -187,8 +187,8 @@ pub fn find_operations(db: &Database, domain: Option<&str>, measurement_name: Op
     //create find options
     let negative_one = -1;
     let sort_document = match order_by_timestamp {
-        true => Some(doc! { "timestamp" => negative_one }),
-        false => Some(doc! { "_id" => 1 }),
+        true => Some(doc!("timestamp" => negative_one)),
+        false => Some(doc!("_id" => 1)),
     };
 
     let find_options = Some(FindOptions {
