@@ -3,10 +3,14 @@ extern crate bson;
 extern crate capnp;
 extern crate clap;
 extern crate mongodb;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 
 mod error;
 mod measurement;
 mod operation;
+mod parameter;
 
 pub mod proddle_capnp {
     include!(concat!(env!("OUT_DIR"), "/proddle_capnp.rs"));
@@ -15,6 +19,7 @@ pub mod proddle_capnp {
 pub use self::error::ProddleError;
 pub use self::measurement::Measurement;
 pub use self::operation::Operation;
+pub use self::parameter::Parameter;
 
 use bson::ordered::OrderedDocument;
 use mongodb::{Client, ThreadedClient};

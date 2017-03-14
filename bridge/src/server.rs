@@ -1,7 +1,7 @@
 extern crate capnp;
 extern crate proddle;
 
-use bson::{Bson, Document};
+use bson::{self, Bson, Document};
 use capnp::capability::Promise;
 use mongodb::db::{Database, ThreadedDatabase};
 use proddle::{Measurement, Operation};
@@ -46,7 +46,7 @@ impl Server for ServerImpl {
             let document = cry!(document);
 
             //parse mongodb document into measurement
-            let measurement = cry!(Measurement::from_mongodb(&document));
+            let measurement: Measurement = cry!(bson::from_bson(Bson::Document(document)));
 
             //check if measurement name already exists and/or version comparrison
             let entry = measurements.entry(measurement.name.to_owned());
@@ -98,10 +98,10 @@ impl Server for ServerImpl {
 
             if let Some(ref parameters) = entry.parameters {
                 let mut measurement_parameters = measurement.borrow().init_parameters(parameters.len() as u32);
-                for (i, (name, value)) in parameters.iter().enumerate() {
+                for (i, parameter) in parameters.iter().enumerate() {
                     let mut measurement_parameter = measurement_parameters.borrow().get(i as u32);
-                    measurement_parameter.set_name(name);
-                    measurement_parameter.set_value(value);
+                    measurement_parameter.set_name(&parameter.name);
+                    measurement_parameter.set_value(&parameter.value);
                 }
             }
 
@@ -140,7 +140,7 @@ impl Server for ServerImpl {
             let document = cry!(document);
 
             //parse mongodb document into measurement
-            let operation = cry!(Operation::from_mongodb(&document));
+            let operation: Operation = cry!(bson::from_bson(Bson::Document(document)));
 
             //hash domain to determine bucket key
             let domain_hash = proddle::hash_string(&operation.domain);
@@ -187,10 +187,10 @@ impl Server for ServerImpl {
 
                 if let Some(ref parameters) = operation.parameters {
                     let mut operation_parameters = result_operation.borrow().init_parameters(parameters.len() as u32);
-                    for (i, (name, value)) in parameters.iter().enumerate() {
+                    for (i, parameter) in parameters.iter().enumerate() {
                         let mut operation_parameter = operation_parameters.borrow().get(i as u32);
-                        operation_parameter.set_name(name);
-                        operation_parameter.set_value(value);
+                        operation_parameter.set_name(&parameter.name);
+                        operation_parameter.set_value(&parameter.value);
                     }
                 }
 
