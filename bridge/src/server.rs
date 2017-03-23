@@ -5,13 +5,13 @@ use bson::{self, Bson, Document};
 use capnp::capability::Promise;
 use mongodb::{Client, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
-use proddle::{Measurement, Operation};
-use proddle::proddle_capnp::proddle::{GetMeasurementsParams, GetMeasurementsResults, GetOperationsParams, GetOperationsResults, SendResultsParams, SendResultsResults};
+use proddle::Operation;
+use proddle::proddle_capnp::proddle::{GetOperationsParams, GetOperationsResults, SendMeasurementsParams, SendMeasurementsResults};
 use proddle::proddle_capnp::proddle::Server;
 use serde_json;
 
-use std::collections::{BTreeMap, HashMap};
-use std::collections::hash_map::{DefaultHasher, Entry};
+use std::collections::BTreeMap;
+use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
 macro_rules! cry {
@@ -41,96 +41,6 @@ impl ServerImpl {
 }
 
 impl Server for ServerImpl {
-    fn get_measurements(&mut self, params: GetMeasurementsParams<>, mut results: GetMeasurementsResults<>) -> Promise<(), capnp::Error> {
-        let proddle_db = self.mongodb_client.db("proddle");
-        cry!(proddle_db.auth(&self.username, &self.password));
-
-        let param_measurements = pry!(pry!(params.get()).get_measurements());
-        
-        //iterate over measurements in mongodb and store in measurements map
-        let mut measurements = HashMap::new();
-        let cursor = cry!(proddle::find_measurements(&proddle_db, None, None, None, false));
-        for document in cursor {
-            let document = cry!(document);
-
-            //parse mongodb document into measurement
-            let measurement: Measurement = cry!(bson::from_bson(Bson::Document(document)));
-
-            //check if measurement name already exists and/or version comparrison
-            let entry = measurements.entry(measurement.name.to_owned());
-            if let Entry::Occupied(mut occupied_entry) = entry {
-                let replace;
-                {
-                    let entry: &Measurement = occupied_entry.get();
-                    replace = measurement.version > entry.version;
-                }
-                
-                //if version is newer then replace
-                if replace {
-                    occupied_entry.insert(measurement);
-                }
-            } else if let Entry::Vacant(vacant_entry) = entry {
-                //if entry does not exist then insert
-                vacant_entry.insert(measurement);
-            }
-        }
-
-        //compare vantage measurement versions to mongodb versions
-        for measurement in param_measurements.iter() {
-            let measurement_name = cry!(measurement.get_name());
-
-            let entry = measurements.entry(measurement_name.to_owned());
-            if let Entry::Occupied(occupied_entry) = entry {
-                //if vantage version is up to date remove from mongodb map
-                if measurement.get_version() >= occupied_entry.get().version {
-                    occupied_entry.remove();
-                }
-            } else if let Entry::Vacant(vacant_entry) = entry {
-                //if mongodb map doens't contain remove from vantage
-                vacant_entry.insert(Measurement::new(None, measurement_name.to_owned(), 0, None, None, None));
-            }
-        }
-
-        //create results message
-        let mut results_measurements = results.get().init_measurements(measurements.len() as u32);
-        for (i, entry) in measurements.values().enumerate() {
-            //populate measurement
-            let mut measurement = results_measurements.borrow().get(i as u32);
-
-            if let Some(timestamp) = entry.timestamp {
-                measurement.set_timestamp(timestamp);
-            }
-
-            measurement.set_name(&entry.name);
-            measurement.set_version(entry.version);
-
-            if let Some(ref parameters) = entry.parameters {
-                let mut measurement_parameters = measurement.borrow().init_parameters(parameters.len() as u32);
-                for (i, parameter) in parameters.iter().enumerate() {
-                    let mut measurement_parameter = measurement_parameters.borrow().get(i as u32);
-                    measurement_parameter.set_name(&parameter.name);
-                    measurement_parameter.set_value(&parameter.value);
-                }
-            }
-
-            if let Some(ref dependencies) = entry.dependencies {
-                let mut measurement_dependencies = measurement.borrow().init_dependencies(dependencies.len() as u32);
-                for (i, dependency) in dependencies.iter().enumerate() {
-                    measurement_dependencies.set(i as u32, dependency);
-                }
-            }
-
-            if let Some(ref content) = entry.content {
-                measurement.set_content(&content);
-            }
-        }
-
-        if measurements.len() != 0 {
-            info!("updated {} measurement(s) in reply", measurements.len());
-        }
-        Promise::ok(())
-    }
-
     fn get_operations(&mut self, params: GetOperationsParams<>, mut results: GetOperationsResults<>) -> Promise<(), capnp::Error> {
         let proddle_db = self.mongodb_client.db("proddle");
         cry!(proddle_db.auth(&self.username, &self.password));
@@ -220,16 +130,16 @@ impl Server for ServerImpl {
         Promise::ok(())
     }
 
-    fn send_results(&mut self, params: SendResultsParams<>, _: SendResultsResults<>) -> Promise<(), capnp::Error> {
+    fn send_measurements(&mut self, params: SendMeasurementsParams<>, _: SendMeasurementsResults<>) -> Promise<(), capnp::Error> {
         let proddle_db = self.mongodb_client.db("proddle");
         cry!(proddle_db.auth(&self.username, &self.password));
 
-        let param_results = pry!(pry!(params.get()).get_results());
+        let param_measurements = pry!(pry!(params.get()).get_measurements());
 
         //iterate over results
         let mut count = 0;
-        for param_result in param_results.iter() {
-            let json_string = param_result.get_json_string().unwrap();
+        for param_measurement in param_measurements.iter() {
+            let json_string = param_measurement.get_json_string().unwrap();
 
             //parse json string into Bson::Document
             let json = match serde_json::from_str(json_string) {
@@ -246,14 +156,14 @@ impl Server for ServerImpl {
             };
 
             //insert document
-            if let Err(e) = proddle_db.collection("results").insert_one(document, None) {
+            if let Err(e) = proddle_db.collection("measurements").insert_one(document, None) {
                 error!("{}", e);
             }
 
             count += 1;
         }
 
-        info!("handled {} results", count);
+        info!("handled {} measurement(s)", count);
         Promise::ok(())
     }
 }
