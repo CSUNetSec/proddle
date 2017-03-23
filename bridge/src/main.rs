@@ -7,13 +7,14 @@ extern crate clap;
 extern crate futures;
 extern crate mongodb;
 extern crate proddle;
-extern crate tokio_core;
 #[macro_use]
 extern crate slog;
 #[macro_use]
 extern crate slog_scope;
 extern crate slog_term;
 extern crate serde_json;
+extern crate tokio_core;
+extern crate tokio_io;
 
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
@@ -25,8 +26,8 @@ use proddle::ProddleError;
 use proddle::proddle_capnp::proddle::ToClient;
 use slog::{DrainExt, Logger};
 use tokio_core::net::TcpListener;
-use tokio_core::io::Io;
 use tokio_core::reactor::Core;
+use tokio_io::AsyncRead;
 
 mod server;
 
