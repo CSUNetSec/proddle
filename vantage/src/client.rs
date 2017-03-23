@@ -1,3 +1,4 @@
+use bson::Bson;
 use capnp::capability::Promise;
 use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
@@ -5,6 +6,7 @@ use capnp_rpc::rpc_twoparty_capnp::Side;
 use futures::Future;
 use proddle::{ProddleError, Measurement, Operation};
 use proddle::proddle_capnp::proddle::Client;
+use serde_json::Value;
 use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
@@ -38,7 +40,7 @@ fn open_stream(bridge_address: &str) -> Result<(Core, Client), ProddleError> {
     Ok((core, proddle))
 }
 
-pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Result<(), ProddleError> {
+pub fn send_results(result_buffer: &mut Vec<Bson>, bridge_address: &str) -> Result<(), ProddleError> {
     //open stream
     let (mut core, proddle) = try!(open_stream(bridge_address));
 
@@ -48,7 +50,7 @@ pub fn send_results(result_buffer: &mut Vec<String>, bridge_address: &str) -> Re
         let mut request_results = request.get().init_results(result_buffer.len() as u32);
         for (i, result) in result_buffer.iter().enumerate() {
             let mut request_result = request_results.borrow().get(i as u32);
-            request_result.set_json_string(result);
+            request_result.set_json_string(&result.to_json().to_string());
         }
     }
 

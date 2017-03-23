@@ -7,7 +7,7 @@ use std::time::Duration;
 
 static PREFIXES: [&'static str; 2] = ["", "www."];
 
-fn http_request(domain: &str) -> Result<Bson, ProddleError> {
+pub fn execute(domain: &str) -> Result<Bson, ProddleError> {
     let mut easy: Option<Easy> = None;
     let (mut internal_error_message, mut measurement_error_message) = (None, None);
     let mut headers = Vec::new();

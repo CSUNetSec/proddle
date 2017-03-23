@@ -13,6 +13,10 @@ env RUST_LOG=info ./bridge
 env RUST_LOG=info ./vantage -H hostname.example.com -I 1.2.3.4
 
 ##TODO
+- change measurement to measurement_class
+- change result to measurement
+- upgrade bson to "0.5"
+
 - validate hostname and ip address on vantage
 - validate module scripts before they're uploaded
 - use pip3 to install dependencies of modules

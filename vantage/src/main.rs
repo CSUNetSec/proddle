@@ -19,6 +19,7 @@ extern crate serde_json;
 extern crate time;
 extern crate tokio_core;
 
+use bson::Bson;
 use clap::{App, ArgMatches};
 use proddle::{ProddleError, Measurement};
 use slog::{DrainExt, Logger};
@@ -33,7 +34,7 @@ use operation_job::OperationJob;
 
 use std::collections::{BinaryHeap, HashMap};
 
-fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u32, u8, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
+fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u32, i32, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
     let hostname = try!(value_t!(matches, "HOSTNAME", String));
     let ip_address = try!(value_t!(matches, "IP_ADDRESS", String));
     let measurements_directory = try!(value_t!(matches, "MEASUREMENTS_DIRECTORY", String));
@@ -43,7 +44,7 @@ fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u6
     let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
     let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
     let bridge_update_interval_seconds = try!(value_t!(matches.value_of("BRIDGE_UPDATE_INTERVAL_SECONDS"), u32));
-    let max_retries = try!(value_t!(matches.value_of("MAX_RETRIES"), u8));
+    let max_retries = try!(value_t!(matches.value_of("MAX_RETRIES"), i32));
     let send_results_interval_seconds = try!(value_t!(matches.value_of("SEND_RESULTS_INTERVAL_SECONDS"), u32));
     let include_tags = match matches.values_of("INCLUDE_TAGS") {
         Some(include_tags) => {
@@ -108,7 +109,7 @@ pub fn main() {
     let (result_tx, result_rx) = chan::sync(50);
     let thread_bridge_address = bridge_address.clone();
     std::thread::spawn(move || {
-        let mut result_buffer: Vec<String> = Vec::new();
+        let mut result_buffer: Vec<Bson> = Vec::new();
         let tick = chan::tick_ms(send_results_interval_seconds * 1000);
 
         loop {
@@ -132,7 +133,7 @@ pub fn main() {
     });
 
     //start operation loop
-    let mut executor = Executor::new(thread_count, &hostname, &ip_address, &measurements_directory, max_retries, result_tx);
+    let mut executor = Executor::new(thread_count, &hostname, &ip_address, max_retries, result_tx);
 
     let execute_operations_tick = chan::tick_ms(5 * 1000);
     let bridge_update_tick = chan::tick_ms(bridge_update_interval_seconds * 1000);
