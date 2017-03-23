@@ -1,3 +1,4 @@
+#[macro_use(bson, doc)]
 extern crate bson;
 extern crate capnp;
 extern crate capnp_rpc;
@@ -5,6 +6,7 @@ extern crate capnp_rpc;
 extern crate chan;
 #[macro_use]
 extern crate clap;
+extern crate curl;
 extern crate futures;
 extern crate proddle;
 extern crate rand;
@@ -22,8 +24,9 @@ use proddle::{ProddleError, Measurement};
 use slog::{DrainExt, Logger};
 
 mod client;
-mod operation_job;
 mod executor;
+mod measurement;
+mod operation_job;
 
 use executor::Executor;
 use operation_job::OperationJob;

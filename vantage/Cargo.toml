@@ -1,6 +1,6 @@
 [package]
 name = "vantage"
-version = "0.2.4"
+version = "0.3.0"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
@@ -9,6 +9,7 @@ capnp = "0.8"
 capnp-rpc = "0.8"
 chan = "0.1"
 clap = {version = "2.19", features = ["yaml"]}
+curl = "0.4"
 futures = "0.1"
 proddle = {path = "../"}
 rand = "0.3"
