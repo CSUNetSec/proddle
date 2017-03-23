@@ -1,4 +1,3 @@
-#[macro_use(bson, doc)]
 extern crate bson;
 #[macro_use]
 extern crate clap;
@@ -12,7 +11,6 @@ use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::ThreadedDatabase;
 use proddle::ProddleError;
 
-mod measurement;
 mod operation;
 
 fn parse_args(matches: &ArgMatches) -> Result<(String, u16, String, String, String, String, String), ProddleError> {
@@ -55,17 +53,7 @@ fn main() {
         panic!("{}", e);
     }
 
-    let result = if let Some(matches) = matches.subcommand_matches("measurement") {
-        if let Some(matches) = matches.subcommand_matches("add") {
-            measurement::add(&db, matches)
-        } else if let Some(matches) = matches.subcommand_matches("delete") {
-            measurement::delete(&db, matches)
-        } else if let Some(matches) = matches.subcommand_matches("search") {
-            measurement::search(&db, matches)
-        } else {
-            panic!("measurement unreachable");
-        }
-    } else if let Some(matches) = matches.subcommand_matches("operation") {
+    let result = if let Some(matches) = matches.subcommand_matches("operation") {
         if let Some(matches) = matches.subcommand_matches("add") {
             operation::add(&db, matches)
         } else if let Some(matches) = matches.subcommand_matches("delete") {

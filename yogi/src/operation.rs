@@ -5,9 +5,8 @@ use proddle::{self, Operation, Parameter, ProddleError};
 use time;
 
 pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
-    let measurement_name = try!(value_t!(matches, "MEASUREMENT_NAME", String));
+    let measurement_class = try!(value_t!(matches, "MEASUREMENT_CLASS", String));
     let domain = try!(value_t!(matches, "DOMAIN", String));
-    let url = try!(value_t!(matches, "URL", String));
     let parameters: Option<Vec<Parameter>> = match matches.values_of("PARAMETER") {
         Some(parameters) => {
             let mut params = Vec::new();
@@ -35,15 +34,14 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     };
 
     //check if measurement exists
-    try!(proddle::find_measurement(db, &measurement_name, None, true));
+    try!(proddle::find_measurement(db, &measurement_class, None, true));
 
     //create opeation document
     let timestamp = Some(time::now_utc().to_timespec().sec);
     let operation = Operation {
         timestamp: timestamp,
-        measurement: measurement_name,
+        measurement_class: measurement_class,
         domain: domain,
-        url: url,
         parameters: parameters,
         tags: tags,
     };

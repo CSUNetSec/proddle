@@ -62,9 +62,9 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
     for i in 0..max_retries {
         //execute measurement
         let timestamp = time::now_utc().to_timespec().sec;
-        let measurement_result = match operation_job.operation.measurement.as_ref() {
+        let measurement_result = match operation_job.operation.measurement_class.as_ref() {
             "HttpGet" => measurement::http_get::execute(&operation_job.operation.domain),
-            _ => return Err(ProddleError::from(format!("Unknown measurement class '{}'.", operation_job.operation.measurement))),
+            _ => return Err(ProddleError::from(format!("Unknown measurement class '{}'.", operation_job.operation.measurement_class))),
         };
 
         //parse result
@@ -80,7 +80,7 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
         document.insert_bson(String::from("timestamp"), bson!(timestamp));
         document.insert_bson(String::from("vantage_hostname"), bson!(hostname));
         document.insert_bson(String::from("vantage_ip_address"), bson!(ip_address));
-        document.insert_bson(String::from("measurement_class"), bson!(&operation_job.operation.measurement));
+        document.insert_bson(String::from("measurement_class"), bson!(&operation_job.operation.measurement_class));
         document.insert_bson(String::from("measurement_domain"), bson!(&operation_job.operation.domain));
 
         //check for errors and handle if necessary

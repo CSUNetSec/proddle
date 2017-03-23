@@ -8,7 +8,6 @@ extern crate serde;
 extern crate serde_derive;
 
 mod error;
-mod measurement;
 mod operation;
 mod parameter;
 
@@ -17,7 +16,6 @@ pub mod proddle_capnp {
 }
 
 pub use self::error::ProddleError;
-pub use self::measurement::Measurement;
 pub use self::operation::Operation;
 pub use self::parameter::Parameter;
 

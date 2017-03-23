@@ -102,9 +102,8 @@ impl Server for ServerImpl {
                     result_operation.set_timestamp(timestamp);
                 }
 
-                result_operation.set_measurement(&operation.measurement);
+                result_operation.set_measurement_class(&operation.measurement_class);
                 result_operation.set_domain(&operation.domain);
-                result_operation.set_url(&operation.url);
 
                 if let Some(ref parameters) = operation.parameters {
                     let mut operation_parameters = result_operation.borrow().init_parameters(parameters.len() as u32);

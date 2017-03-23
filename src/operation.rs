@@ -7,9 +7,8 @@ use std::hash::{Hash, Hasher};
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Operation {
     pub timestamp: Option<i64>,
-    pub measurement: String,
+    pub measurement_class: String,
     pub domain: String,
-    pub url: String,
     pub parameters: Option<Vec<Parameter>>,
     pub tags: Option<Vec<String>>,
 }
@@ -21,9 +20,8 @@ impl Operation {
             _ => Some(msg.get_timestamp()),
         };
 
-        let measurement = msg.get_measurement().unwrap().to_owned();
+        let measurement_class = msg.get_measurement_class().unwrap().to_owned();
         let domain = msg.get_domain().unwrap().to_owned();
-        let url = msg.get_url().unwrap().to_owned();
         let parameters = match msg.has_parameters() {
             true => {
                 let mut parameters = Vec::new();
@@ -59,9 +57,8 @@ impl Operation {
         Ok(
             Operation {
                 timestamp: timestamp,
-                measurement: measurement,
+                measurement_class: measurement_class,
                 domain: domain,
-                url: url,
                 parameters: parameters,
                 tags: tags,
             }
@@ -72,9 +69,8 @@ impl Operation {
 impl Hash for Operation {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.timestamp.hash(state);
-        self.measurement.hash(state);
+        self.measurement_class.hash(state);
         self.domain.hash(state);
-        self.url.hash(state);
 
         if let Some(ref parameters) = self.parameters {
             for parameter in parameters {
