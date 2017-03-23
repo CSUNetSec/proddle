@@ -8,6 +8,7 @@ use measurement;
 use operation_job::OperationJob;
 
 use std;
+use std::collections::HashMap;
 
 pub struct Executor {
     operation_tx: Sender<OperationJob>,
@@ -51,19 +52,19 @@ impl Executor {
 }
 
 fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, max_retries: i32, tx: Sender<Bson>) -> Result<(), ProddleError> {
-    //TODO create measurement arguments
-    /*let mut arguments = Vec::new();
-    if let Some(parameters) = operation_job.operation.parameters {
-        for parameter in parameters {
-            arguments.push(format!("--{}=\"{}\"", parameter.name, parameter.value));
+    //create measurement arguments
+    let mut parameters = HashMap::new();
+    if let Some(operation_parameters) = operation_job.operation.parameters {
+        for operation_parameter in operation_parameters {
+            parameters.insert(operation_parameter.name, operation_parameter.value);
         }
-    }*/
+    }
 
     for i in 0..max_retries {
         //execute measurement
         let timestamp = time::now_utc().to_timespec().sec;
         let measurement_result = match operation_job.operation.measurement_class.as_ref() {
-            "HttpGet" => measurement::http_get::execute(&operation_job.operation.domain),
+            "HttpGet" => measurement::http_get::execute(&operation_job.operation.domain, &parameters),
             _ => return Err(ProddleError::from(format!("Unknown measurement class '{}'.", operation_job.operation.measurement_class))),
         };
 

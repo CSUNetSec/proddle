@@ -3,15 +3,22 @@ use curl::easy::{Easy, List};
 
 use proddle::ProddleError;
 
+use std::collections::HashMap;
 use std::time::Duration;
 
 static PREFIXES: [&'static str; 2] = ["", "www."];
 
-pub fn execute(domain: &str) -> Result<Bson, ProddleError> {
+pub fn execute(domain: &str, parameters: &HashMap<String, String>) -> Result<Bson, ProddleError> {
     let mut easy: Option<Easy> = None;
     let (mut internal_error_message, mut measurement_error_message) = (None, None);
     let mut headers = Vec::new();
     let mut content = Vec::new();
+
+    //parse parameters
+    let timeout = match parameters.get("timeout") {
+        Some(timeout) => try!(timeout.parse()),
+        None => 30,
+    };
 
     //iterate over prefixes and attempt each one
     for prefix in PREFIXES.iter() {
@@ -21,7 +28,7 @@ pub fn execute(domain: &str) -> Result<Bson, ProddleError> {
         headers.clear();
         content.clear();
 
-        match send_request(&format!("{}{}", prefix, domain), &mut headers, &mut content) {
+        match send_request(&format!("{}{}", prefix, domain), timeout, &mut headers, &mut content) {
             Ok((e, error_message)) => {
                 //check for measurement error
                 easy = Some(e);
@@ -111,12 +118,12 @@ fn parse_time(duration: &Duration) -> f64 {
     duration.as_secs() as f64 + (duration.subsec_nanos() as f64 / 1000000000.0)
 }
 
-fn send_request(url: &str, headers: &mut Vec<String>, content: &mut Vec<u8>) -> Result<(Easy, Option<String>), ProddleError> {
+fn send_request(url: &str, timeout: u64, headers: &mut Vec<String>, content: &mut Vec<u8>) -> Result<(Easy, Option<String>), ProddleError> {
     let mut error_message = None;
     let mut easy = Easy::new();
     try!(easy.url(url));
     try!(easy.get(true));
-    try!(easy.timeout(Duration::new(30, 0))); //30 second timeout
+    try!(easy.timeout(Duration::new(timeout, 0))); //30 second timeout
     try!(easy.follow_location(true)); //follow redirects
     try!(easy.http_transfer_decoding(true)); //request compressed http response
     try!(easy.accept_encoding("")); //accept all supported encodings
