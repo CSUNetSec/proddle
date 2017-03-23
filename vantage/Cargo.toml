@@ -13,7 +13,6 @@ curl = "0.4"
 futures = "0.1"
 proddle = {path = "../"}
 rand = "0.3"
-serde_json = "0.9"
 slog = "1.5"
 slog-scope = "0.2"
 slog-term = "1.5"

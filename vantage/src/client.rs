@@ -4,21 +4,17 @@ use capnp_rpc::RpcSystem;
 use capnp_rpc::twoparty::VatNetwork;
 use capnp_rpc::rpc_twoparty_capnp::Side;
 use futures::Future;
-use proddle::{ProddleError, Measurement, Operation};
+use proddle::{ProddleError, Operation};
 use proddle::proddle_capnp::proddle::Client;
-use serde_json::Value;
 use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
 
 use operation_job::OperationJob;
 
-use std;
 use std::collections::{BinaryHeap, HashMap};
 use std::collections::hash_map::DefaultHasher;
-use std::fs::File;
 use std::hash::{Hash, Hasher};
-use std::io::Write;
 use std::net::SocketAddr;
 use std::str::FromStr;
 
@@ -40,17 +36,17 @@ fn open_stream(bridge_address: &str) -> Result<(Core, Client), ProddleError> {
     Ok((core, proddle))
 }
 
-pub fn send_results(result_buffer: &mut Vec<Bson>, bridge_address: &str) -> Result<(), ProddleError> {
+pub fn send_measurements(measurement_buffer: &mut Vec<Bson>, bridge_address: &str) -> Result<(), ProddleError> {
     //open stream
     let (mut core, proddle) = try!(open_stream(bridge_address));
 
     //initialize request
-    let mut request = proddle.send_results_request();
+    let mut request = proddle.send_measurements_request();
     {
-        let mut request_results = request.get().init_results(result_buffer.len() as u32);
-        for (i, result) in result_buffer.iter().enumerate() {
-            let mut request_result = request_results.borrow().get(i as u32);
-            request_result.set_json_string(&result.to_json().to_string());
+        let mut request_measurements = request.get().init_measurements(measurement_buffer.len() as u32);
+        for (i, measurement) in measurement_buffer.iter().enumerate() {
+            let mut request_measurement = request_measurements.borrow().get(i as u32);
+            request_measurement.set_json_string(&measurement.to_json().to_string());
         }
     }
 
@@ -62,60 +58,8 @@ pub fn send_results(result_buffer: &mut Vec<Bson>, bridge_address: &str) -> Resu
     );
 
     //clear result buffer
-    result_buffer.clear();
+    measurement_buffer.clear();
     Ok(())
-}
-
-pub fn update_measurements(measurements: &mut HashMap<String, Measurement>, measurements_directory: &str, bridge_address: &str) -> Result<i32, ProddleError> {
-    //open stream
-    let (mut core, proddle) = try!(open_stream(bridge_address));
-
-    //populate get measurements request
-    let mut request = proddle.get_measurements_request();
-    {
-        let mut request_measurements = request.get().init_measurements(measurements.len() as u32);
-        for (i, measurement) in measurements.values().enumerate() {
-            let mut request_measurement = request_measurements.borrow().get(i as u32);
-
-            if let Some(timestamp) = measurement.timestamp {
-                request_measurement.set_timestamp(timestamp);
-            }
-
-            request_measurement.set_name(&measurement.name);
-            request_measurement.set_version(measurement.version);
-        }
-    }
-
-    //send get measurements request
-    let mut measurements_added = 0;
-    let response = try!(core.run(request.send().promise));
-    {
-        let result_measurements = try!(try!(response.get()).get_measurements());
-        
-        for result_measurement in result_measurements.iter() {
-            let measurement = try!(Measurement::from_capnproto(&result_measurement));
-            if measurement.version == 0 {
-                //delete file
-                try!(std::fs::remove_file(format!("{}/{}", measurements_directory, measurement.name)));
-
-                //remove from measurements data structures
-                measurements.remove(&measurement.name);
-            } else {
-                //create file
-                let mut file = try!(File::create(format!("{}/{}", measurements_directory, measurement.name)));
-
-                let content = measurement.content.clone().unwrap().into_bytes();
-                try!(file.write_all(&content));
-                try!(file.flush());
-
-                //add to measurements data structure
-                measurements.insert(measurement.name.to_owned(), measurement);
-                measurements_added += 1;
-            }
-        }
-    }
-
-    Ok(measurements_added)
 }
 
 pub fn update_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, operation_bucket_hashes: &mut HashMap<u64, u64>,

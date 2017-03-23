@@ -51,18 +51,18 @@ args:
         takes_value: true
         default_value: "1440"
         help: Seconds interval to poll bridge for updates.
-    - SEND_RESULTS_INTERVAL_SECONDS:
+    - SEND_MEASUREMENTS_INTERVAL_SECONDS:
         short: s
-        long: send_results_interval_seconds
+        long: send_measurements_interval_seconds
         takes_value: true
         default_value: "300"
-        help: Seconds interval to attempt to send results.
+        help: Seconds interval to attempt to send measurements.
     - MAX_RETRIES:
         short: m
         long: max_retries
         takes_value: true
         default_value: "3"
-        help: Maximum number of retries for each measurement.
+        help: Maximum number of retries for each operation.
     - INCLUDE_TAGS:
         short: t
         long: tag

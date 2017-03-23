@@ -15,13 +15,12 @@ extern crate slog;
 #[macro_use]
 extern crate slog_scope;
 extern crate slog_term;
-extern crate serde_json;
 extern crate time;
 extern crate tokio_core;
 
 use bson::Bson;
 use clap::{App, ArgMatches};
-use proddle::{ProddleError, Measurement};
+use proddle::ProddleError;
 use slog::{DrainExt, Logger};
 
 mod client;
@@ -34,10 +33,9 @@ use operation_job::OperationJob;
 
 use std::collections::{BinaryHeap, HashMap};
 
-fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u64, usize, String, u32, i32, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
+fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, u64, usize, String, u32, i32, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
     let hostname = try!(value_t!(matches, "HOSTNAME", String));
     let ip_address = try!(value_t!(matches, "IP_ADDRESS", String));
-    let measurements_directory = try!(value_t!(matches, "MEASUREMENTS_DIRECTORY", String));
     let bucket_count = try!(value_t!(matches.value_of("BUCKET_COUNT"), u64));
     let thread_count = try!(value_t!(matches.value_of("THREAD_COUNT"), usize));
     let bridge_ip_address = try!(matches.value_of("BRIDGE_IP_ADDRESS").ok_or("failed to parse bridge ip address"));
@@ -45,7 +43,7 @@ fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u6
     let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
     let bridge_update_interval_seconds = try!(value_t!(matches.value_of("BRIDGE_UPDATE_INTERVAL_SECONDS"), u32));
     let max_retries = try!(value_t!(matches.value_of("MAX_RETRIES"), i32));
-    let send_results_interval_seconds = try!(value_t!(matches.value_of("SEND_RESULTS_INTERVAL_SECONDS"), u32));
+    let send_measurements_interval_seconds = try!(value_t!(matches.value_of("SEND_MEASUREMENTS_INTERVAL_SECONDS"), u32));
     let include_tags = match matches.values_of("INCLUDE_TAGS") {
         Some(include_tags) => {
             let mut hash_map = HashMap::new();
@@ -67,8 +65,8 @@ fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, String, u6
         None => Vec::new(),
     };
 
-    Ok((hostname, ip_address, measurements_directory, bucket_count, thread_count, bridge_address, 
-        bridge_update_interval_seconds, max_retries, send_results_interval_seconds, include_tags, exclude_tags))
+    Ok((hostname, ip_address, bucket_count, thread_count, bridge_address, bridge_update_interval_seconds, 
+        max_retries, send_measurements_interval_seconds, include_tags, exclude_tags))
 }
 
 pub fn main() {
@@ -78,15 +76,14 @@ pub fn main() {
     
     //initialize vantage parameters
     info!("parsing command line arguments");
-    let (hostname, ip_address, measurements_directory, bucket_count, thread_count, bridge_address, 
-         bridge_update_interval_seconds, max_retries, send_results_interval_seconds, include_tags, exclude_tags) = match parse_args(&matches) {
+    let (hostname, ip_address, bucket_count, thread_count, bridge_address, bridge_update_interval_seconds, 
+            max_retries, send_measurements_interval_seconds, include_tags, exclude_tags) = match parse_args(&matches) {
         Ok(args) => args,
         Err(e) => panic!("{}", e),
     };
 
     //initialize vantage data structures
     info!("initializing vantage data structures");
-    let mut measurements: HashMap<String, Measurement> = HashMap::new();
     let mut operations: HashMap<u64, BinaryHeap<OperationJob>> = HashMap::new();
     let mut operation_bucket_hashes: HashMap<u64, u64> = HashMap::new();
 
@@ -100,31 +97,35 @@ pub fn main() {
     }
 
     //initialize measurements and operations
-    if let Err(e) = get_bridge_updates(&mut measurements, &mut operations, &mut operation_bucket_hashes, 
-            &include_tags, &exclude_tags, &measurements_directory, &bridge_address) {
-        panic!("{}", e);
+    match client::update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags, &bridge_address) {
+        Ok(operations_updated) => {
+            if operations_updated > 0 {
+                info!("updated {} operation(s)", operations_updated);
+            }
+        },
+        Err(e) => error!("{}", e),
     }
 
-    //start recv result channel
-    let (result_tx, result_rx) = chan::sync(50);
+    //start recv measurement channel
+    let (measurement_tx, measurement_rx) = chan::sync(50);
     let thread_bridge_address = bridge_address.clone();
     std::thread::spawn(move || {
-        let mut result_buffer: Vec<Bson> = Vec::new();
-        let tick = chan::tick_ms(send_results_interval_seconds * 1000);
+        let mut measurement_buffer: Vec<Bson> = Vec::new();
+        let tick = chan::tick_ms(send_measurements_interval_seconds * 1000);
 
         loop {
             chan_select! {
-                result_rx.recv() -> result => {
-                    match result {
-                        Some(result) => result_buffer.push(result),
-                        None => error!("failed to retrieve result from channel"),
+                measurement_rx.recv() -> measurement => {
+                    match measurement {
+                        Some(measurement) => measurement_buffer.push(measurement),
+                        None => error!("failed to retrieve measurement from channel"),
                     }
                 },
                 tick.recv() => {
-                    if result_buffer.len() > 0 {
-                        info!("sending {} results to bridge", result_buffer.len());
-                        if let Err(e) = client::send_results(&mut result_buffer, &thread_bridge_address) {
-                            error!("failed to send results: {}", e);
+                    if measurement_buffer.len() > 0 {
+                        info!("sending {} measurements to bridge", measurement_buffer.len());
+                        if let Err(e) = client::send_measurements(&mut measurement_buffer, &thread_bridge_address) {
+                            error!("failed to send measurements: {}", e);
                         };
                     }
                 },
@@ -133,7 +134,7 @@ pub fn main() {
     });
 
     //start operation loop
-    let mut executor = Executor::new(thread_count, &hostname, &ip_address, max_retries, result_tx);
+    let mut executor = Executor::new(thread_count, &hostname, &ip_address, max_retries, measurement_tx);
 
     let execute_operations_tick = chan::tick_ms(5 * 1000);
     let bridge_update_tick = chan::tick_ms(bridge_update_interval_seconds * 1000);
@@ -145,9 +146,13 @@ pub fn main() {
                 }
             },
             bridge_update_tick.recv() => {
-                if let Err(e) = get_bridge_updates(&mut measurements, &mut operations, &mut operation_bucket_hashes, 
-                        &include_tags, &exclude_tags, &measurements_directory, &bridge_address) {
-                    error!("{}", e);
+                match client::update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags, &bridge_address) {
+                    Ok(operations_updated) => {
+                        if operations_updated > 0 {
+                            info!("updated {} operation(s)", operations_updated);
+                        }
+                    },
+                    Err(e) => error!("{}", e),
                 }
             }
         }
@@ -185,22 +190,6 @@ fn execute_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, e
                 break;
             }
         }
-    }
-
-    Ok(())
-}
-
-fn get_bridge_updates(measurements: &mut HashMap<String, Measurement>, operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, 
-        operation_bucket_hashes: &mut HashMap<u64, u64>, include_tags: &HashMap<&str, i64>, exclude_tags: &Vec<&str>, 
-        measurements_directory: &str, bridge_address: &str) -> Result<(), ProddleError> {
-    let measurements_updated = try!(client::update_measurements(measurements, measurements_directory, bridge_address)); 
-    if measurements_updated > 0 {
-        info!("updated {} measurement(s)", measurements_updated);
-    }
-
-    let operations_updated = try!(client::update_operations(operations, operation_bucket_hashes, include_tags, exclude_tags, bridge_address));
-    if operations_updated > 0 {
-        info!("updated {} operation(s)", operations_updated);
     }
 
     Ok(())

@@ -13,10 +13,9 @@ env RUST_LOG=info ./bridge
 env RUST_LOG=info ./vantage -H hostname.example.com -I 1.2.3.4
 
 ##TODO
-- change measurement to measurement_class
-- change result to measurement
+- (everywhere) change measurement to measurement_class
+- (everywhere) change result to measurement
 - upgrade bson to "0.5"
+- vantage - add tokio_io crate to remove deprecated tokio_core items
 
 - validate hostname and ip address on vantage
-- validate module scripts before they're uploaded
-- use pip3 to install dependencies of modules

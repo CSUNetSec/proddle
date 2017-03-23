@@ -3,7 +3,7 @@
 interface Proddle {
     getMeasurements @0 (measurements :List(Measurement)) -> (measurements :List(Measurement));
     getOperations @1 (bucketHashes :List(BucketHash)) -> (operationBuckets :List(OperationBucket));
-    sendResults @2 (results: List(Result)) -> ();
+    sendMeasurements @2 (measurements: List(Result)) -> ();
 }
 
 struct BucketHash {
