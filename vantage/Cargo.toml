@@ -4,7 +4,7 @@ version = "0.3.1"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
-bson = "0.4"
+bson = "0.5"
 capnp = "0.8"
 capnp-rpc = "0.8"
 chan = "0.1"
@@ -18,3 +18,4 @@ slog-scope = "0.2"
 slog-term = "1.5"
 time = "0.1"
 tokio-core = "0.1"
+tokio-io = "0.1"

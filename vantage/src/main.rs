@@ -17,6 +17,7 @@ extern crate slog_scope;
 extern crate slog_term;
 extern crate time;
 extern crate tokio_core;
+extern crate tokio_io;
 
 use bson::Bson;
 use clap::{App, ArgMatches};

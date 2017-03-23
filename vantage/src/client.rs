@@ -6,9 +6,9 @@ use capnp_rpc::rpc_twoparty_capnp::Side;
 use futures::Future;
 use proddle::{ProddleError, Operation};
 use proddle::proddle_capnp::proddle::Client;
-use tokio_core::io::Io;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor::Core;
+use tokio_io::AsyncRead;
 
 use operation_job::OperationJob;
 
