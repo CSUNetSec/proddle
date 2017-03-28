@@ -13,8 +13,8 @@ args:
         short: I
         long: ip_address
         takes_value: true
-        required: true
-        help: Ip address of vantage.
+        default_value: ""
+        help: Ip address of vantage. If not provided automatic retrieval is attempted.
     - MEASUREMENTS_DIRECTORY:
         short: d
         long: measurements_directory
