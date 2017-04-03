@@ -1,6 +1,5 @@
 #[macro_use(bson, doc)]
 extern crate bson;
-extern crate capnp;
 extern crate clap;
 extern crate mongodb;
 extern crate serde;
@@ -8,16 +7,12 @@ extern crate serde;
 extern crate serde_derive;
 
 mod error;
+mod message;
 mod operation;
-mod parameter;
-
-pub mod proddle_capnp {
-    include!(concat!(env!("OUT_DIR"), "/proddle_capnp.rs"));
-}
 
 pub use self::error::ProddleError;
+pub use self::message::Message;
 pub use self::operation::Operation;
-pub use self::parameter::Parameter;
 
 use bson::ordered::OrderedDocument;
 use mongodb::{Client, ThreadedClient};

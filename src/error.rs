@@ -1,5 +1,4 @@
 extern crate bson;
-extern crate capnp;
 extern crate clap;
 extern crate curl;
 extern crate mongodb;
@@ -10,7 +9,6 @@ use std::fmt::{Display, Formatter, Result};
 #[derive(Debug)]
 pub enum ProddleError {
     AddrParse(std::net::AddrParseError),
-    Capnp(capnp::Error),
     Clap(clap::Error),
     Curl(curl::Error),
     EncoderError(bson::EncoderError),
@@ -24,7 +22,6 @@ impl Display for ProddleError {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match *self {
             ProddleError::AddrParse(ref err) => write!(f, "AddrParseError: {}", err),
-            ProddleError::Capnp(ref err) => write!(f, "CapnpError: {}", err),
             ProddleError::Clap(ref err) => write!(f, "ClapError: {}", err),
             ProddleError::Curl(ref err) => write!(f, "CurlError: {}", err),
             ProddleError::EncoderError(ref err) => write!(f, "EncoderError: {}", err),
@@ -39,12 +36,6 @@ impl Display for ProddleError {
 impl From<std::net::AddrParseError> for ProddleError {
     fn from(err: std::net::AddrParseError) -> ProddleError {
         ProddleError::AddrParse(err)
-    }
-}
-
-impl From<capnp::Error> for ProddleError {
-    fn from(err: capnp::Error) -> ProddleError {
-        ProddleError::Capnp(err)
     }
 }
 
