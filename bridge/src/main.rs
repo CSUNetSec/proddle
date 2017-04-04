@@ -102,10 +102,18 @@ fn handle_stream(stream: &mut TcpStream, db_wrapper: &DbWrapper) -> Result<(), P
         MessageType::SendMeasurementsRequest => {
             match request.send_measurements_request {
                 Some(measurements) => {
+                    //attempt to send measurements to db
                     let measurement_count = measurements.len();
-                    let measurement_failures = try!(db_wrapper.send_measurements(measurements));
-                    info!("{}: inserted {} measurement(s), {} measurement(s) failed", stream.peer_addr().unwrap(), measurement_count - measurement_failures.len(), measurement_failures.len());
-                    let message = Message::send_measurements_response(measurement_failures);
+                    let message = match db_wrapper.send_measurements(measurements) {
+                        Ok(measurement_failures) => {
+                            info!("{}: inserted {} measurement(s), {} measurement(s) failed", stream.peer_addr().unwrap(), 
+                                measurement_count - measurement_failures.len(), measurement_failures.len());
+                            Message::send_measurements_response(measurement_failures)
+                        },
+                        Err(e) => Message::error(format!("{}", e)),
+                    };
+
+                    //send response
                     try!(proddle::message_to_stream(&message, stream));
                     Ok(())
                 },
@@ -115,11 +123,18 @@ fn handle_stream(stream: &mut TcpStream, db_wrapper: &DbWrapper) -> Result<(), P
         MessageType::UpdateOperationsRequest => {
             match request.update_operations_request {
                 Some(operation_bucket_hashes) => {
-                    let operation_buckets = try!(db_wrapper.update_operations(operation_bucket_hashes));
-                    if operation_buckets.len() > 0 {
-                        info!("{}: updated {} operation bucket(s)", stream.peer_addr().unwrap(), operation_buckets.len());
-                    }
-                    let message = Message::update_operations_response(operation_buckets);
+                    //attempt to update operations from db
+                    let message = match db_wrapper.update_operations(operation_bucket_hashes) {
+                        Ok(operation_buckets) => {
+                            if operation_buckets.len() > 0 {
+                                info!("{}: updated {} operation bucket(s)", stream.peer_addr().unwrap(), operation_buckets.len());
+                            }
+                            Message::update_operations_response(operation_buckets)
+                        },
+                        Err(e) => Message::error(format!("{}", e)),
+                    };
+
+                    //send response
                     try!(proddle::message_to_stream(&message, stream));
                     Ok(())
                 },

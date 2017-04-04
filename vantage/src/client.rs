@@ -31,6 +31,12 @@ impl Client {
         try!(proddle::message_to_stream(&request, &mut stream));
         let response = try!(proddle::message_from_stream(&mut stream));
         match response.message_type {
+            MessageType::Error => {
+                match response.error {
+                    Some(error) => Err(ProddleError::from(error)),
+                    None => Err(ProddleError::from("malformed error message in send measurements")),
+                }
+            },
             MessageType::SendMeasurementsResponse => {
                 //TODO handle send measurements response
                 measurement_buffer.clear();
@@ -53,6 +59,12 @@ impl Client {
         try!(proddle::message_to_stream(&request, &mut stream));
         let response = try!(proddle::message_from_stream(&mut stream));
         match response.message_type {
+            MessageType::Error => {
+                match response.error {
+                    Some(error) => Err(ProddleError::from(error)),
+                    None => Err(ProddleError::from("malformed error message in update operations")),
+                }
+            },
             MessageType::UpdateOperationsResponse => {
                 match response.update_operations_response {
                     Some(operation_buckets) => {

@@ -21,6 +21,7 @@ use std::net::TcpStream;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum MessageType {
     Dummy,
+    Error,
     UpdateOperationsRequest,
     UpdateOperationsResponse,
     SendMeasurementsRequest,
@@ -30,6 +31,7 @@ pub enum MessageType {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Message {
     pub message_type: MessageType,
+    pub error: Option<String>,
     pub update_operations_request: Option<HashMap<u64, u64>>,
     pub update_operations_response: Option<HashMap<u64, Vec<Operation>>>,
     pub send_measurements_request: Option<Vec<String>>,
@@ -37,9 +39,21 @@ pub struct Message {
 }
 
 impl Message {
+    pub fn error(error: String) -> Message {
+        Message {
+            message_type: MessageType::Error,
+            error: Some(error),
+            update_operations_request: None,
+            update_operations_response: None,
+            send_measurements_request: None,
+            send_measurements_response: None,
+        }
+    }
+
     pub fn update_operations_request(operation_bucket_hashes: HashMap<u64, u64>) -> Message {
         Message {
             message_type: MessageType::UpdateOperationsRequest,
+            error: None,
             update_operations_request: Some(operation_bucket_hashes),
             update_operations_response: None,
             send_measurements_request: None,
@@ -50,6 +64,7 @@ impl Message {
     pub fn update_operations_response(operation_buckets: HashMap<u64, Vec<Operation>>) -> Message {
         Message {
             message_type: MessageType::UpdateOperationsResponse,
+            error: None,
             update_operations_request: None,
             update_operations_response: Some(operation_buckets),
             send_measurements_request: None,
@@ -60,6 +75,7 @@ impl Message {
     pub fn send_measurements_request(measurements: Vec<String>) -> Message {
         Message {
             message_type: MessageType::SendMeasurementsRequest,
+            error: None,
             update_operations_request: None,
             update_operations_response: None,
             send_measurements_request: Some(measurements),
@@ -70,6 +86,7 @@ impl Message {
     pub fn send_measurements_response(measurement_failures: Vec<usize>) -> Message {
         Message {
             message_type: MessageType::SendMeasurementsResponse,
+            error: None,
             update_operations_request: None,
             update_operations_response: None,
             send_measurements_request: None,
