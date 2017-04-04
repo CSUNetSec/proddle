@@ -1,5 +1,5 @@
 use bson::Bson;
-use proddle::{Message, ProddleError, ProddleProto, Operation};
+use proddle::{self, Message, MessageType, ProddleError, Operation};
 
 use operation_job::OperationJob;
 
@@ -7,38 +7,61 @@ use std;
 use std::collections::{BinaryHeap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::net::SocketAddr;
+use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
 
 pub struct Client {
     socket_addr: SocketAddr,
+    byte_buffer: Vec<u8>,
 }
 
 impl Client {
     pub fn new(socket_addr: SocketAddr) -> Client {
         Client {
             socket_addr: socket_addr,
+            byte_buffer: vec![0; 1024],
         }
     }
 
     pub fn send_measurements(&mut self, measurement_buffer: &mut Vec<Bson>) -> Result<(), ProddleError> {
-        /*match TcpStream::connect(socket_addr) {
-            Ok(mut stream) => {
-                proddle::message_to_stream(&message, &mut stream);
-                match proddle::message_from_stream(&mut buf, &mut  stream) {
-                    Ok(Some(message)) => println!("recv response: {:?}", message),
-                    _ => println!("unable to decode message"),
-                }
-            },
-            Err(e) => println!("unable to connect"),
-        };*/
+        //open stream
+        let mut stream = try!(TcpStream::connect(self.socket_addr));
 
-        Ok(())
+        //create request
+        let measurements: Vec<String> = measurement_buffer.iter().map(|bson| bson.to_json().to_string()).collect();
+        let request = Message::send_measurements_request(measurements);
+
+        //send request and recv response
+        try!(proddle::message_to_stream(&request, &mut stream));
+        let response = try!(proddle::message_from_stream(&mut self.byte_buffer, &mut stream));
+        match response.message_type {
+            MessageType::SendMeasurementsResponse => {
+                //TODO handle send measurements response
+                Ok(())
+            },
+            _ => Err(ProddleError::from("failed to receive SendMeasurementsResponse."))
+        }
     }
 
     pub fn update_operations(&mut self, operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, 
                              operation_bucket_hashes: &mut HashMap<u64, u64>, include_tags: &HashMap<&str, i64>, 
                              exclude_tags: &Vec<&str>) -> Result<i32, ProddleError> {
-        Ok(0)
+        //open stream
+        let mut stream = try!(TcpStream::connect(self.socket_addr));
+
+        //create request
+        let request = Message::update_operations_request(operation_bucket_hashes.clone());
+
+        //send request and recv response
+        try!(proddle::message_to_stream(&request, &mut stream));
+        let response = try!(proddle::message_from_stream(&mut self.byte_buffer, &mut stream));
+        match response.message_type {
+            MessageType::SendMeasurementsResponse => {
+                let mut updated_operations_count = 0;
+                //TODO handle send measurements response
+                Ok(updated_operations_count)
+            },
+            _ => Err(ProddleError::from("failed to receive UpdateOperationsResponse."))
+        }
     }
 }

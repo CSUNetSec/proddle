@@ -14,18 +14,12 @@ extern crate slog;
 extern crate slog_scope;
 extern crate slog_term;
 extern crate time;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_proto;
-extern crate tokio_service;
 
 use bson::Bson;
 use clap::{App, ArgMatches};
 use curl::easy::Easy;
 use proddle::{Message, ProddleError};
 use slog::{DrainExt, Logger};
-use tokio_core::reactor::Core;
-use tokio_service::Service;
 
 mod client;
 mod executor;
@@ -40,6 +34,7 @@ use std::collections::{BinaryHeap, HashMap};
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
 fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, u64, usize, SocketAddr, u32, i32, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
@@ -106,7 +101,7 @@ pub fn main() {
     info!("initializing vantage data structures");
     let mut operations: HashMap<u64, BinaryHeap<OperationJob>> = HashMap::new();
     let mut operation_bucket_hashes: HashMap<u64, u64> = HashMap::new();
-    let mut client = Client::new(socket_addr.clone());
+    let mut client = Arc::new(RwLock::new(Client::new(socket_addr.clone())));
 
     //populate operations with buckets
     let mut counter = 0;
@@ -117,22 +112,25 @@ pub fn main() {
         counter += delta;
     }
 
-    //initialize measurements and operations
-    /*match client.update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags) {
-        Ok(operations_updated) => {
-            if operations_updated > 0 {
-                info!("updated {} operation(s)", operations_updated);
-            }
-        },
-        Err(e) => error!("{}", e),
-    }*/
+    //initialize operations
+    {
+        let mut client = client.write().unwrap();
+        match client.update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags) {
+            Ok(updated_operations_count) => {
+                if updated_operations_count > 0 {
+                    info!("updated {} operation(s)", updated_operations_count);
+                }
+            },
+            Err(e) => error!("{}", e),
+        }
+    }
 
     //start recv measurement channel
     let (measurement_tx, measurement_rx) = chan::sync(50);
+    let t_client = client.clone();
     std::thread::spawn(move || {
         let mut measurement_buffer: Vec<Bson> = Vec::new();
         let tick = chan::tick_ms(send_measurements_interval_seconds * 1000);
-        let mut client = Client::new(socket_addr.clone());
 
         loop {
             chan_select! {
@@ -145,6 +143,7 @@ pub fn main() {
                 tick.recv() => {
                     if measurement_buffer.len() > 0 {
                         info!("sending {} measurements to bridge", measurement_buffer.len());
+                        let mut client = t_client.write().unwrap();
                         if let Err(e) = client.send_measurements(&mut measurement_buffer) {
                             error!("failed to send measurements: {}", e);
                         };
@@ -159,7 +158,6 @@ pub fn main() {
 
     let execute_operations_tick = chan::tick_ms(5 * 1000);
     let bridge_update_tick = chan::tick_ms(bridge_update_interval_seconds * 1000);
-    let mut buf = vec![0; 1024];
     loop {
         chan_select! {
             execute_operations_tick.recv() => {
@@ -168,10 +166,11 @@ pub fn main() {
                 }
             },
             bridge_update_tick.recv() => {
+                let mut client = client.write().unwrap();
                 match client.update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags) {
-                    Ok(operations_updated) => {
-                        if operations_updated > 0 {
-                            info!("updated {} operation(s)", operations_updated);
+                    Ok(updated_operations_count) => {
+                        if updated_operations_count > 0 {
+                            info!("updated {} operation(s)", updated_operations_count);
                         }
                     },
                     Err(e) => error!("{}", e),

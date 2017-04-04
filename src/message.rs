@@ -30,12 +30,22 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new_update_operations_request() -> Message {
+    pub fn update_operations_request(operation_bucket_hashes: HashMap<u64, u64>) -> Message {
         Message {
             message_type: MessageType::UpdateOperationsRequest,
-            update_operations_request: None,
+            update_operations_request: Some(operation_bucket_hashes),
             update_operations_response: None,
             send_measurements_request: None,
+            send_measurements_response: None,
+        }
+    }
+
+    pub fn send_measurements_request(measurements: Vec<String>) -> Message {
+        Message {
+            message_type: MessageType::SendMeasurementsRequest,
+            update_operations_request: None,
+            update_operations_response: None,
+            send_measurements_request: Some(measurements),
             send_measurements_response: None,
         }
     }

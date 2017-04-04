@@ -19,7 +19,7 @@ mod message;
 mod operation;
 
 pub use self::error::ProddleError;
-pub use self::message::{Message, ProddleProto};
+pub use self::message::{Message, MessageType, ProddleProto};
 pub use self::operation::Operation;
 
 use std::collections::BTreeMap;
@@ -39,7 +39,7 @@ pub fn message_to_stream(message: &Message, stream: &mut TcpStream) -> Result<()
     Ok(())
 }
 
-pub fn message_from_stream(buf: &mut Vec<u8>, stream: &mut TcpStream) -> Result<Option<Message>, ProddleError> {
+pub fn message_from_stream(buf: &mut Vec<u8>, stream: &mut TcpStream) -> Result<Message, ProddleError> {
     //read from stream
     let mut bytes_read = 0;
     while bytes_read < 4 {
@@ -53,7 +53,7 @@ pub fn message_from_stream(buf: &mut Vec<u8>, stream: &mut TcpStream) -> Result<
     }
 
     let message = bincode::deserialize(&buf[4..bytes_read]).unwrap();
-    Ok(Some(message))
+    Ok(message)
 }
 
 /*
