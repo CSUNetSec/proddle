@@ -12,14 +12,12 @@ use std::str::FromStr;
 
 pub struct Client {
     socket_addr: SocketAddr,
-    byte_buffer: Vec<u8>,
 }
 
 impl Client {
     pub fn new(socket_addr: SocketAddr) -> Client {
         Client {
             socket_addr: socket_addr,
-            byte_buffer: vec![0; 4096],
         }
     }
 
@@ -33,7 +31,7 @@ impl Client {
 
         //send request and recv response
         try!(proddle::message_to_stream(&request, &mut stream));
-        let response = try!(proddle::message_from_stream(&mut self.byte_buffer, &mut stream));
+        let response = try!(proddle::message_from_stream(&mut stream));
         match response.message_type {
             MessageType::SendMeasurementsResponse => {
                 //TODO handle send measurements response
@@ -54,7 +52,7 @@ impl Client {
 
         //send request and recv response
         try!(proddle::message_to_stream(&request, &mut stream));
-        let response = try!(proddle::message_from_stream(&mut self.byte_buffer, &mut stream));
+        let response = try!(proddle::message_from_stream(&mut stream));
         match response.message_type {
             MessageType::UpdateOperationsResponse => {
                 let mut updated_operations_count = 0;

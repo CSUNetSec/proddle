@@ -1,7 +1,8 @@
-extern crate bson;
-extern crate clap;
-extern crate curl;
-extern crate mongodb;
+use bincode;
+use bson;
+use clap;
+use curl;
+use mongodb;
 
 use std;
 use std::fmt::{Display, Formatter, Result};
@@ -9,6 +10,7 @@ use std::fmt::{Display, Formatter, Result};
 #[derive(Debug)]
 pub enum ProddleError {
     AddrParse(std::net::AddrParseError),
+    Bincode(Box<bincode::ErrorKind>),
     Clap(clap::Error),
     Curl(curl::Error),
     DecoderError(bson::DecoderError),
@@ -23,6 +25,7 @@ impl Display for ProddleError {
     fn fmt(&self, f: &mut Formatter) -> Result {
         match *self {
             ProddleError::AddrParse(ref err) => write!(f, "AddrParseError: {}", err),
+            ProddleError::Bincode(ref err) => write!(f, "Bincode: {}", err),
             ProddleError::Clap(ref err) => write!(f, "ClapError: {}", err),
             ProddleError::Curl(ref err) => write!(f, "CurlError: {}", err),
             ProddleError::DecoderError(ref err) => write!(f, "DecoderError: {}", err),
@@ -38,6 +41,12 @@ impl Display for ProddleError {
 impl From<std::net::AddrParseError> for ProddleError {
     fn from(err: std::net::AddrParseError) -> ProddleError {
         ProddleError::AddrParse(err)
+    }
+}
+
+impl From<Box<bincode::ErrorKind>> for ProddleError {
+    fn from(err: Box<bincode::ErrorKind>) -> ProddleError {
+        ProddleError::Bincode(err)
     }
 }
 

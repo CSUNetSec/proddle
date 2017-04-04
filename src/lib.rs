@@ -13,8 +13,7 @@ mod error;
 
 pub use self::error::ProddleError;
 
-use std::collections::{BTreeMap, HashMap};
-use std::collections::hash_map::DefaultHasher;
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::io::{Read, Write};
 use std::net::TcpStream;
@@ -113,7 +112,7 @@ pub struct Parameter {
 
 pub fn message_to_stream(message: &Message, stream: &mut TcpStream) -> Result<(), ProddleError> {
     let encoded: Vec<u8> = bincode::serialize(message, Infinite).unwrap();
-    let length = 4 + encoded.len() as u32;
+    let length = encoded.len() as u32;
 
     try!(stream.write(&[(length as u8), ((length >> 8) as u8), ((length >> 16) as u8), ((length >> 24) as u8)]));
     try!(stream.write_all(&encoded));
@@ -122,19 +121,13 @@ pub fn message_to_stream(message: &Message, stream: &mut TcpStream) -> Result<()
     Ok(())
 }
 
-pub fn message_from_stream(buf: &mut Vec<u8>, stream: &mut TcpStream) -> Result<Message, ProddleError> {
-    //read from stream
-    let mut bytes_read = 0;
-    while bytes_read < 4 {
-        bytes_read += try!(stream.read(&mut buf[0..4]));
-    }
+pub fn message_from_stream(stream: &mut TcpStream) -> Result<Message, ProddleError> {
+    let mut length_buffer = vec![0u8; 4];
+    try!(stream.read_exact(&mut length_buffer));
+    let length = ((length_buffer[0] as u32) | ((length_buffer[1] as u32) << 8) | ((length_buffer[2] as u32) << 16) | ((length_buffer[3] as u32) << 24)) as usize;
 
-    //decode length
-    let length = ((buf[0] as u32) | ((buf[1] as u32) << 8) | ((buf[2] as u32) << 16) | ((buf[3] as u32) << 24)) as usize;
-    while bytes_read < length {
-        bytes_read += try!(stream.read(&mut buf[bytes_read..length]));
-    }
-
-    let message = bincode::deserialize(&buf[4..bytes_read]).unwrap();
+    let mut byte_buffer = vec![0u8; length];
+    try!(stream.read_exact(&mut byte_buffer));
+    let message = try!(bincode::deserialize(&byte_buffer));
     Ok(message)
 }

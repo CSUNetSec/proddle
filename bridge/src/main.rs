@@ -64,14 +64,13 @@ pub fn main() {
         let t_stream_rx: Receiver<TcpStream> = stream_rx.clone();
         let t_db_wrapper = db_wrapper.clone();
         let _ = std::thread::spawn(move || {
-            let mut byte_buffer = vec![0; 4096];
             loop {
                 chan_select! {
                     t_stream_rx.recv() -> stream => {
                         match stream {
                             Some(mut stream) => {
                                 let db_wrapper = t_db_wrapper.read().unwrap();
-                                if let Err(e) = handle_stream(&mut stream, &mut byte_buffer, &db_wrapper) {
+                                if let Err(e) = handle_stream(&mut stream, &db_wrapper) {
                                     error!("{}", e);
                                 }
                             },
@@ -97,8 +96,8 @@ pub fn main() {
     }
 }
 
-fn handle_stream(stream: &mut TcpStream, byte_buffer: &mut Vec<u8>, db_wrapper: &DbWrapper) -> Result<(), ProddleError> {
-    let request = try!(proddle::message_from_stream(byte_buffer, stream));
+fn handle_stream(stream: &mut TcpStream, db_wrapper: &DbWrapper) -> Result<(), ProddleError> {
+    let request = try!(proddle::message_from_stream(stream));
     match request.message_type {
         MessageType::SendMeasurementsRequest => {
             match request.send_measurements_request {
