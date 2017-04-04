@@ -3,7 +3,6 @@ extern crate bson;
 extern crate chan;
 #[macro_use]
 extern crate clap;
-extern crate futures;
 extern crate mongodb;
 extern crate proddle;
 #[macro_use]
@@ -15,15 +14,12 @@ extern crate serde_json;
 
 use chan::Receiver;
 use clap::{App, ArgMatches};
-use futures::{BoxFuture, Future};
 use proddle::{Message, MessageType, ProddleError};
 use slog::{DrainExt, Logger};
 
 mod db_wrapper;
-
 use db_wrapper::DbWrapper;
 
-use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
@@ -108,6 +104,7 @@ fn handle_stream(stream: &mut TcpStream, byte_buffer: &mut Vec<u8>, db_wrapper: 
             match request.send_measurements_request {
                 Some(measurements) => {
                     let _ = try!(db_wrapper.send_measurements(measurements));
+                    //TODO send response
                     Ok(())
                 },
                 None => Err(ProddleError::from("recv malformed send measurements request")),
@@ -117,6 +114,7 @@ fn handle_stream(stream: &mut TcpStream, byte_buffer: &mut Vec<u8>, db_wrapper: 
             match request.update_operations_request {
                 Some(operation_bucket_hashes) => {
                     let _ = try!(db_wrapper.update_operations(operation_bucket_hashes));
+                    //TODO send response
                     Ok(())
                 },
                 None => Err(ProddleError::from("recv malformed update operations request")),

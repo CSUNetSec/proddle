@@ -1,32 +1,63 @@
 extern crate bincode;
-#[macro_use(bson, doc)]
 extern crate bson;
-extern crate bytes;
 extern crate clap;
+extern crate curl;
 extern crate mongodb;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate tokio_io;
-extern crate tokio_proto;
 
 use bincode::Infinite;
-use bytes::{BigEndian, Buf, BufMut, BytesMut};
-use bson::ordered::OrderedDocument;
 
 mod error;
-mod message;
-mod operation;
 
 pub use self::error::ProddleError;
-pub use self::message::{Message, MessageType, ProddleProto};
-pub use self::operation::Operation;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
-use std::io::{Cursor, Read, Write};
+use std::io::{Read, Write};
 use std::net::TcpStream;
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum MessageType {
+    Dummy,
+    UpdateOperationsRequest,
+    UpdateOperationsResponse,
+    SendMeasurementsRequest,
+    SendMeasurementsResponse,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Message {
+    pub message_type: MessageType,
+    pub update_operations_request: Option<HashMap<u64, u64>>,
+    pub update_operations_response: Option<HashMap<u64, Vec<Operation>>>,
+    pub send_measurements_request: Option<Vec<String>>,
+    pub send_measurements_response: Option<Vec<bool>>,
+}
+
+impl Message {
+    pub fn update_operations_request(operation_bucket_hashes: HashMap<u64, u64>) -> Message {
+        Message {
+            message_type: MessageType::UpdateOperationsRequest,
+            update_operations_request: Some(operation_bucket_hashes),
+            update_operations_response: None,
+            send_measurements_request: None,
+            send_measurements_response: None,
+        }
+    }
+
+    pub fn send_measurements_request(measurements: Vec<String>) -> Message {
+        Message {
+            message_type: MessageType::SendMeasurementsRequest,
+            update_operations_request: None,
+            update_operations_response: None,
+            send_measurements_request: Some(measurements),
+            send_measurements_response: None,
+        }
+    }
+}
 
 pub fn message_to_stream(message: &Message, stream: &mut TcpStream) -> Result<(), ProddleError> {
     let encoded: Vec<u8> = bincode::serialize(message, Infinite).unwrap();
@@ -56,6 +87,37 @@ pub fn message_from_stream(buf: &mut Vec<u8>, stream: &mut TcpStream) -> Result<
     Ok(message)
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Operation {
+    pub timestamp: i64,
+    pub measurement_class: String,
+    pub domain: String,
+    pub parameters: Vec<Parameter>,
+    pub tags: Vec<String>,
+}
+
+impl Hash for Operation {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.timestamp.hash(state);
+        self.measurement_class.hash(state);
+        self.domain.hash(state);
+
+        for parameter in self.parameters.iter() {
+            parameter.name.hash(state);
+            parameter.value.hash(state);
+        }
+
+        for tag in self.tags.iter() {
+            tag.hash(state);
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Parameter {
+    pub name: String,
+    pub value: String,
+}
 /*
  * Miscellaneous
  */
