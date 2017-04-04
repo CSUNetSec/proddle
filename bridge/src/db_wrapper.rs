@@ -1,15 +1,17 @@
 use mongodb::{Client, ClientOptions, ThreadedClient};
-use proddle::ProddleError;
+use proddle::{Operation, ProddleError};
 
-pub struct MongodbClient {
+use std::collections::HashMap;
+
+pub struct DbWrapper {
     inner: Client,
     username: String,
     password: String,
 }
 
-impl MongodbClient {
+impl DbWrapper {
     pub fn new(ip_address: &str, port: u16, username: &str, password: &str, ca_file: &str, 
-               certificate_file: &str, key_file: &str) -> Result<MongodbClient, ProddleError> {
+               certificate_file: &str, key_file: &str) -> Result<DbWrapper, ProddleError> {
         let client = if ca_file.eq("") && certificate_file.eq("") && key_file.eq("") {
             try!(Client::connect(&ip_address, port))
         } else {
@@ -18,11 +20,19 @@ impl MongodbClient {
         };
 
         Ok(
-            MongodbClient {
+            DbWrapper {
                 inner: client,
                 username: username.to_owned(),
                 password: password.to_owned(),
             }
         )
+    }
+
+    pub fn send_measurements(&self, measurements: Vec<String>) -> Result<Vec<bool>, ProddleError> {
+        unimplemented!();
+    }
+
+    pub fn update_operations(&self, operation_bucket_hashes: HashMap<u64, u64>) -> Result<HashMap<u64, Vec<Operation>>, ProddleError> {
+        unimplemented!();
     }
 }

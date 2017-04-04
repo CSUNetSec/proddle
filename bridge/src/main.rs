@@ -12,25 +12,21 @@ extern crate slog;
 extern crate slog_scope;
 extern crate slog_term;
 extern crate serde_json;
-extern crate tokio_io;
-extern crate tokio_proto;
-extern crate tokio_service;
 
 use chan::Receiver;
 use clap::{App, ArgMatches};
 use futures::{BoxFuture, Future};
-use proddle::{Message, ProddleError, ProddleProto};
+use proddle::{Message, MessageType, ProddleError};
 use slog::{DrainExt, Logger};
-use tokio_proto::TcpServer;
-use tokio_service::Service;
 
-mod mongodb_client;
+mod db_wrapper;
 
-use mongodb_client::MongodbClient;
+use db_wrapper::DbWrapper;
 
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::str::FromStr;
+use std::sync::{Arc, RwLock};
 
 fn parse_args(matches: &ArgMatches) -> Result<(SocketAddr, String, u16, String, String, String, String, String), ProddleError> {
     let bridge_ip_address = try!(value_t!(matches, "BRIDGE_IP_ADDRESS", String));
@@ -60,34 +56,27 @@ pub fn main() {
     };
 
     //connect to mongodb client
-    let mongodb_client = match MongodbClient::new(&mongodb_ip_address, mongodb_port, &username, 
+    let db_wrapper = match DbWrapper::new(&mongodb_ip_address, mongodb_port, &username, 
                                                   &password, &ca_file, &certificate_file, &key_file) {
-        Ok(mongodb_client) => mongodb_client,
-        Err(e) => panic!("failed to connect to mongodb: {}", e),
+        Ok(db_wrapper) => Arc::new(RwLock::new(db_wrapper)),
+        Err(e) => panic!("failed to initialize db_wrapper: {}", e),
     };
-
-    //start bridge
-    //let server = TcpServer::new(ProddleProto, socket_addr);
-    //server.serve(|| Ok(Bridge));
 
     //start stream threadpool
     let (stream_tx, stream_rx) = chan::sync(0);
     for _ in 0..8 {
         let t_stream_rx: Receiver<TcpStream> = stream_rx.clone();
+        let t_db_wrapper = db_wrapper.clone();
         let _ = std::thread::spawn(move || {
-            let mut buf = vec![0; 1024];
+            let mut byte_buffer = vec![0; 1024];
             loop {
                 chan_select! {
                     t_stream_rx.recv() -> stream => {
                         match stream {
                             Some(mut stream) => {
-                                debug!("handling request from {}", stream.peer_addr().unwrap());
-                                match proddle::message_from_stream(&mut buf, &mut stream) {
-                                    Ok(Some(message)) => {
-                                        proddle::message_to_stream(&message, &mut stream);
-                                    },
-                                    Err(e) => error!("failed to decode message: {}", e),
-                                    _ => error!("failed to decode message"),
+                                let db_wrapper = t_db_wrapper.read().unwrap();
+                                if let Err(e) = handle_stream(&mut stream, &mut byte_buffer, &db_wrapper) {
+                                    error!("{}", e);
                                 }
                             },
                             None => error!("failed to recv stream"),
@@ -112,16 +101,27 @@ pub fn main() {
     }
 }
 
-/*struct Bridge;
-
-impl Service for Bridge {
-    type Request = Message;
-    type Response = Message;
-    type Error = ProddleError;
-    type Future = BoxFuture<Self::Response, Self::Error>;
-
-    fn call(&self, req: Self::Request) -> Self::Future {
-        println!("req message type: {:?}", req.message_type);
-        futures::future::ok(req).boxed()
+fn handle_stream(stream: &mut TcpStream, byte_buffer: &mut Vec<u8>, db_wrapper: &DbWrapper) -> Result<(), ProddleError> {
+    let request = try!(proddle::message_from_stream(byte_buffer, stream));
+    match request.message_type {
+        MessageType::SendMeasurementsRequest => {
+            match request.send_measurements_request {
+                Some(measurements) => {
+                    let _ = try!(db_wrapper.send_measurements(measurements));
+                    Ok(())
+                },
+                None => Err(ProddleError::from("recv malformed send measurements request")),
+            }
+        },
+        MessageType::UpdateOperationsRequest => {
+            match request.update_operations_request {
+                Some(operation_bucket_hashes) => {
+                    let _ = try!(db_wrapper.update_operations(operation_bucket_hashes));
+                    Ok(())
+                },
+                None => Err(ProddleError::from("recv malformed update operations request")),
+            }
+        },
+        _ => Err(ProddleError::from(format!("unsupported message type: '{:?}'", request.message_type)))
     }
-}*/
+}
