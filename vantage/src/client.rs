@@ -56,11 +56,62 @@ impl Client {
         let response = try!(proddle::message_from_stream(&mut stream));
         match response.message_type {
             MessageType::UpdateOperationsResponse => {
-                let mut updated_operations_count = 0;
-                //TODO handle send measurements response
-                Ok(updated_operations_count)
+                match response.update_operations_response {
+                    Some(operation_buckets) => {
+                        let mut updated_operations_count = 0;
+
+                        //iterate over operation buckets
+                        for (bucket_key, operation_vec) in operation_buckets.iter() {
+                            let mut binary_heap = BinaryHeap::new();
+                            let mut hasher = DefaultHasher::new();
+                            for operation in operation_vec {
+                                operation.hash(&mut hasher);
+
+                                //validate tags
+                                let mut operation_interval = i64::max_value();
+                                //check if tag is in exclude tags
+                                let mut found = false;
+                                for operation_tag in operation.tags.iter() {
+                                    for exclude_tag in exclude_tags {
+                                        if operation_tag.eq(*exclude_tag) {
+                                            found = true;
+                                        }
+                                    }
+                                }
+
+                                if found {
+                                    continue
+                                }
+
+                                //determine interval
+                                for operation_tag in operation.tags.iter() {
+                                    for (include_tag, interval) in include_tags {
+                                        if operation_tag.eq(*include_tag) && *interval < operation_interval {
+                                            operation_interval = *interval;
+                                        }
+                                    }
+                                }
+
+                                //check if include tag interval was found
+                                if operation_interval == i64::max_value() {
+                                    continue;
+                                }
+
+                                //add operation
+                                binary_heap.push(OperationJob::new(operation.to_owned(), operation_interval));
+                                updated_operations_count += 1;
+                            }
+
+                            //insert new operations into operations map
+                            operations.insert(*bucket_key, binary_heap);
+                            operation_bucket_hashes.insert(*bucket_key, hasher.finish());
+                        }
+                        Ok(updated_operations_count)
+                    },
+                    None => Err(ProddleError::from("malformed update opertions respose.")),
+                }
             },
-            _ => Err(ProddleError::from("failed to receive UpdateOperationsResponse."))
+            _ => Err(ProddleError::from("failed to receive UpdateOperationsResponse.")),
         }
     }
 }
