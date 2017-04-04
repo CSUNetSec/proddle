@@ -17,6 +17,7 @@ functionality is on the road map.
 The cli application for manual configuration.
 
 ## TODO
+- fix yogi
 - validate hostname and ip address on vantage
 - add information to README.md
 

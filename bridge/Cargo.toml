@@ -1,6 +1,6 @@
 [package]
 name = "bridge"
-version = "0.2.5"
+version = "0.3.0"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
