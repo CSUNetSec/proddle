@@ -1,3 +1,4 @@
+use bincode::{self, Infinite};
 use bytes::{BigEndian, Buf, BufMut, BytesMut};
 use tokio_io::codec::{Encoder, Decoder};
 
@@ -7,6 +8,7 @@ use operation::Operation;
 use std::collections::HashMap;
 use std::io::Cursor;
 
+#[derive(Clone, Deserialize, Serialize)]
 pub enum MessageType {
     Dummy,
     UpdateOperationsRequest,
@@ -15,6 +17,7 @@ pub enum MessageType {
     SendMeasurementsResponse,
 }
 
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Message {
     message_type: MessageType,
     update_operations_request: Option<HashMap<u64, u64>>,
@@ -30,20 +33,9 @@ impl Encoder for MessageCodec {
     type Error = ProddleError;
 
     fn encode(&mut self, msg: Message, buf: &mut BytesMut) -> Result<(), ProddleError> {
-        let mut msg_buf: Vec<u8> = Vec::new();
-
-        //encode message type
-        match msg.message_type {
-            MessageType::UpdateOperationsRequest => msg_buf.push(0u8),
-            MessageType::UpdateOperationsResponse => msg_buf.push(1u8),
-            MessageType::SendMeasurementsRequest => msg_buf.push(2u8),
-            MessageType::SendMeasurementsResponse => msg_buf.push(3u8),
-            _ => buf.put(255u8),
-        }
-
-        buf.put_u32::<BigEndian>(4 + msg_buf.len() as u32);
-        buf.put_slice(&msg_buf);
-        println!("encoded length: {}", buf.len());
+        let encoded: Vec<u8> = bincode::serialize(&msg, Infinite).unwrap();
+        buf.put_u32::<BigEndian>(4 + encoded.len() as u32);
+        buf.put_slice(&encoded);
         Ok(())
     }
 }
@@ -65,26 +57,8 @@ impl Decoder for MessageCodec {
         }
         let buf = buf.split_to(length);
 
-        //decode message type
-        let message_type = match buf[4] {
-            0 => MessageType::UpdateOperationsRequest,
-            1 => MessageType::UpdateOperationsResponse,
-            2 => MessageType::SendMeasurementsRequest,
-            3 => MessageType::SendMeasurementsResponse,
-            _ => MessageType::Dummy,
-        };
-
-        Ok(
-            Some(
-                Message{
-                    message_type: message_type,
-                    update_operations_request: None,
-                    update_operations_response: None,
-                    send_measurements_request: None,
-                    send_measurements_response: None,
-                }
-            )
-        )
+        let message = bincode::deserialize(&buf[4..]).unwrap();
+        Ok(Some(message))
     }
 }
 

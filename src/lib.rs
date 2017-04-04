@@ -1,3 +1,4 @@
+extern crate bincode;
 #[macro_use(bson, doc)]
 extern crate bson;
 extern crate bytes;
