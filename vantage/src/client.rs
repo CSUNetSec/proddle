@@ -1,14 +1,12 @@
 use bson::Bson;
-use proddle::{self, Message, MessageType, ProddleError, Operation};
+use proddle::{self, Message, MessageType, ProddleError};
 
 use operation_job::OperationJob;
 
-use std;
 use std::collections::{BinaryHeap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::net::{SocketAddr, TcpStream};
-use std::str::FromStr;
 
 pub struct Client {
     socket_addr: SocketAddr,

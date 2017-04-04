@@ -5,7 +5,6 @@ extern crate chan;
 #[macro_use]
 extern crate clap;
 extern crate curl;
-extern crate futures;
 extern crate proddle;
 extern crate rand;
 #[macro_use]
@@ -17,8 +16,7 @@ extern crate time;
 
 use bson::Bson;
 use clap::{App, ArgMatches};
-use curl::easy::Easy;
-use proddle::{Message, ProddleError};
+use proddle::ProddleError;
 use slog::{DrainExt, Logger};
 
 mod client;
@@ -31,11 +29,9 @@ use executor::Executor;
 use operation_job::OperationJob;
 
 use std::collections::{BinaryHeap, HashMap};
-use std::io::{Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
-use std::time::Duration;
 
 fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, u64, usize, SocketAddr, u32, i32, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
     let hostname = try!(value_t!(matches, "HOSTNAME", String));
@@ -80,28 +76,17 @@ pub fn main() {
     
     //initialize vantage parameters
     info!("parsing command line arguments");
-    let (hostname, mut ip_address, bucket_count, thread_count, socket_addr, bridge_update_interval_seconds, 
+    let (hostname, ip_address, bucket_count, thread_count, socket_addr, bridge_update_interval_seconds, 
             max_retries, send_measurements_interval_seconds, include_tags, exclude_tags) = match parse_args(&matches) {
         Ok(args) => args,
         Err(e) => panic!("{}", e),
     };
 
-    //attempt to automatically retrieve parameters if not supplied
-    /*if ip_address.eq("") {
-        match find_ip_address() {
-            Ok(ip) => {
-                info!("automatically retrieved ip address '{}'", ip);
-                ip_address = ip;
-            },
-            Err(e) => panic!("failed to automatically determine ip address: {}. specify with -i flag.", e),
-        }
-    }*/
-
     //initialize vantage data structures
     info!("initializing vantage data structures");
     let mut operations: HashMap<u64, BinaryHeap<OperationJob>> = HashMap::new();
     let mut operation_bucket_hashes: HashMap<u64, u64> = HashMap::new();
-    let mut client = Arc::new(RwLock::new(Client::new(socket_addr.clone())));
+    let client = Arc::new(RwLock::new(Client::new(socket_addr.clone())));
 
     //populate operations with buckets
     let mut counter = 0;
@@ -179,31 +164,6 @@ pub fn main() {
         }
     }
 }
-/*
-TODO - remove
-fn find_ip_address() -> Result<String, ProddleError> {
-    let mut easy = Easy::new();
-    try!(easy.url("http://proddle.netsec.colostate.edu/check_ip.html"));
-    try!(easy.get(true));
-    try!(easy.timeout(Duration::new(30, 0))); //30 second timeout
-    try!(easy.follow_location(true)); //follow redirects
-    try!(easy.http_transfer_decoding(true)); //request compressed http response
-    try!(easy.accept_encoding("")); //accept all supported encodings
-
-    //set data transfer function
-    let mut content = Vec::new();
-    {
-        let mut transfer = easy.transfer();
-        try!(transfer.write_function(|data| {
-            content.extend_from_slice(data);
-            Ok(data.len())
-        }));
-
-        try!(transfer.perform());
-    }
-
-    Ok(String::from_utf8_lossy(&content).into_owned())
-}*/
 
 fn execute_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, executor: &mut Executor) -> Result<(), ProddleError> {
     let now = time::now_utc().to_timespec().sec;
