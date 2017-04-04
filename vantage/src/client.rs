@@ -19,7 +19,7 @@ impl Client {
     pub fn new(socket_addr: SocketAddr) -> Client {
         Client {
             socket_addr: socket_addr,
-            byte_buffer: vec![0; 1024],
+            byte_buffer: vec![0; 4096],
         }
     }
 
@@ -56,7 +56,7 @@ impl Client {
         try!(proddle::message_to_stream(&request, &mut stream));
         let response = try!(proddle::message_from_stream(&mut self.byte_buffer, &mut stream));
         match response.message_type {
-            MessageType::SendMeasurementsResponse => {
+            MessageType::UpdateOperationsResponse => {
                 let mut updated_operations_count = 0;
                 //TODO handle send measurements response
                 Ok(updated_operations_count)

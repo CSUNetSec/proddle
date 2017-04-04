@@ -64,7 +64,7 @@ pub fn main() {
         let t_stream_rx: Receiver<TcpStream> = stream_rx.clone();
         let t_db_wrapper = db_wrapper.clone();
         let _ = std::thread::spawn(move || {
-            let mut byte_buffer = vec![0; 1024];
+            let mut byte_buffer = vec![0; 4096];
             loop {
                 chan_select! {
                     t_stream_rx.recv() -> stream => {
@@ -103,8 +103,12 @@ fn handle_stream(stream: &mut TcpStream, byte_buffer: &mut Vec<u8>, db_wrapper: 
         MessageType::SendMeasurementsRequest => {
             match request.send_measurements_request {
                 Some(measurements) => {
-                    let _ = try!(db_wrapper.send_measurements(measurements));
-                    //TODO send response
+                    debug!("recv send measurements request");
+                    let measurement_count = measurements.len();
+                    let measurement_failures = try!(db_wrapper.send_measurements(measurements));
+                    info!("{}: recv {} measurement(s), {} measurement(s)", stream.peer_addr().unwrap(), measurement_count, measurement_failures.len());
+                    let message = Message::send_measurements_response(measurement_failures);
+                    try!(proddle::message_to_stream(&message, stream));
                     Ok(())
                 },
                 None => Err(ProddleError::from("recv malformed send measurements request")),
@@ -113,8 +117,11 @@ fn handle_stream(stream: &mut TcpStream, byte_buffer: &mut Vec<u8>, db_wrapper: 
         MessageType::UpdateOperationsRequest => {
             match request.update_operations_request {
                 Some(operation_bucket_hashes) => {
-                    let _ = try!(db_wrapper.update_operations(operation_bucket_hashes));
-                    //TODO send response
+                    debug!("recv update operations request");
+                    let operation_buckets = try!(db_wrapper.update_operations(operation_bucket_hashes));
+                    info!("{}: updating {} operation bucket(s)", stream.peer_addr().unwrap(), operation_buckets.len());
+                    let message = Message::update_operations_response(operation_buckets);
+                    try!(proddle::message_to_stream(&message, stream));
                     Ok(())
                 },
                 None => Err(ProddleError::from("recv malformed update operations request")),

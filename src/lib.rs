@@ -34,7 +34,7 @@ pub struct Message {
     pub update_operations_request: Option<HashMap<u64, u64>>,
     pub update_operations_response: Option<HashMap<u64, Vec<Operation>>>,
     pub send_measurements_request: Option<Vec<String>>,
-    pub send_measurements_response: Option<Vec<bool>>,
+    pub send_measurements_response: Option<Vec<usize>>,
 }
 
 impl Message {
@@ -43,6 +43,16 @@ impl Message {
             message_type: MessageType::UpdateOperationsRequest,
             update_operations_request: Some(operation_bucket_hashes),
             update_operations_response: None,
+            send_measurements_request: None,
+            send_measurements_response: None,
+        }
+    }
+
+    pub fn update_operations_response(operation_buckets: HashMap<u64, Vec<Operation>>) -> Message {
+        Message {
+            message_type: MessageType::UpdateOperationsResponse,
+            update_operations_request: None,
+            update_operations_response: Some(operation_buckets),
             send_measurements_request: None,
             send_measurements_response: None,
         }
@@ -57,34 +67,16 @@ impl Message {
             send_measurements_response: None,
         }
     }
-}
 
-pub fn message_to_stream(message: &Message, stream: &mut TcpStream) -> Result<(), ProddleError> {
-    let encoded: Vec<u8> = bincode::serialize(message, Infinite).unwrap();
-    let length = 4 + encoded.len() as u32;
-
-    try!(stream.write(&[(length as u8), ((length >> 8) as u8), ((length >> 16) as u8), ((length >> 24) as u8)]));
-    try!(stream.write_all(&encoded));
-    try!(stream.flush());
-
-    Ok(())
-}
-
-pub fn message_from_stream(buf: &mut Vec<u8>, stream: &mut TcpStream) -> Result<Message, ProddleError> {
-    //read from stream
-    let mut bytes_read = 0;
-    while bytes_read < 4 {
-        bytes_read += try!(stream.read(&mut buf[0..4]));
+    pub fn send_measurements_response(measurement_failures: Vec<usize>) -> Message {
+        Message {
+            message_type: MessageType::SendMeasurementsResponse,
+            update_operations_request: None,
+            update_operations_response: None,
+            send_measurements_request: None,
+            send_measurements_response: Some(measurement_failures),
+        }
     }
-
-    //decode length
-    let length = ((buf[0] as u32) | ((buf[1] as u32) << 8) | ((buf[2] as u32) << 16) | ((buf[3] as u32) << 24)) as usize;
-    while bytes_read < length {
-        bytes_read += try!(stream.read(&mut buf[bytes_read..length]));
-    }
-
-    let message = bincode::deserialize(&buf[4..bytes_read]).unwrap();
-    Ok(message)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -118,24 +110,31 @@ pub struct Parameter {
     pub name: String,
     pub value: String,
 }
-/*
- * Miscellaneous
- */
-pub fn hash_string(value: &str) -> u64 {
-    let mut hasher = DefaultHasher::new();
-    value.hash(&mut hasher);
-    hasher.finish()
+
+pub fn message_to_stream(message: &Message, stream: &mut TcpStream) -> Result<(), ProddleError> {
+    let encoded: Vec<u8> = bincode::serialize(message, Infinite).unwrap();
+    let length = 4 + encoded.len() as u32;
+
+    try!(stream.write(&[(length as u8), ((length >> 8) as u8), ((length >> 16) as u8), ((length >> 24) as u8)]));
+    try!(stream.write_all(&encoded));
+    try!(stream.flush());
+
+    Ok(())
 }
 
-pub fn get_bucket_key(map: &BTreeMap<u64, DefaultHasher>, key: u64) -> Option<u64> {
-    let mut bucket_key = 0;
-    for map_key in map.keys() {
-        if *map_key > key {
-            break;
-        }
-
-        bucket_key = *map_key;
+pub fn message_from_stream(buf: &mut Vec<u8>, stream: &mut TcpStream) -> Result<Message, ProddleError> {
+    //read from stream
+    let mut bytes_read = 0;
+    while bytes_read < 4 {
+        bytes_read += try!(stream.read(&mut buf[0..4]));
     }
 
-    Some(bucket_key)
+    //decode length
+    let length = ((buf[0] as u32) | ((buf[1] as u32) << 8) | ((buf[2] as u32) << 16) | ((buf[3] as u32) << 24)) as usize;
+    while bytes_read < length {
+        bytes_read += try!(stream.read(&mut buf[bytes_read..length]));
+    }
+
+    let message = bincode::deserialize(&buf[4..bytes_read]).unwrap();
+    Ok(message)
 }

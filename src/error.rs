@@ -11,6 +11,7 @@ pub enum ProddleError {
     AddrParse(std::net::AddrParseError),
     Clap(clap::Error),
     Curl(curl::Error),
+    DecoderError(bson::DecoderError),
     EncoderError(bson::EncoderError),
     Io(std::io::Error),
     MongoDB(mongodb::Error),
@@ -24,6 +25,7 @@ impl Display for ProddleError {
             ProddleError::AddrParse(ref err) => write!(f, "AddrParseError: {}", err),
             ProddleError::Clap(ref err) => write!(f, "ClapError: {}", err),
             ProddleError::Curl(ref err) => write!(f, "CurlError: {}", err),
+            ProddleError::DecoderError(ref err) => write!(f, "DecoderError: {}", err),
             ProddleError::EncoderError(ref err) => write!(f, "EncoderError: {}", err),
             ProddleError::Io(ref err) => write!(f, "IoError: {}", err),
             ProddleError::MongoDB(ref err) => write!(f, "MongoDBError: {}", err),
@@ -48,6 +50,12 @@ impl From<clap::Error> for ProddleError {
 impl From<curl::Error> for ProddleError {
     fn from(err: curl::Error) -> ProddleError {
         ProddleError::Curl(err)
+    }
+}
+
+impl From<bson::DecoderError> for ProddleError {
+    fn from(err: bson::DecoderError) -> ProddleError {
+        ProddleError::DecoderError(err)
     }
 }
 
