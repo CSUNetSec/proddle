@@ -1,6 +1,6 @@
 use std::hash::{Hash, Hasher};
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Operation {
     pub timestamp: i64,
     pub measurement_class: String,
@@ -26,7 +26,7 @@ impl Hash for Operation {
     }
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Parameter {
     pub name: String,
     pub value: String,

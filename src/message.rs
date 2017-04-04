@@ -20,7 +20,7 @@ pub enum MessageType {
     SendMeasurementsResponse,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Message {
     pub message_type: MessageType,
     pub update_operations_request: Option<HashMap<u64, u64>>,

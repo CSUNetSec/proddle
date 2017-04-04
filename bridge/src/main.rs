@@ -1,5 +1,7 @@
 extern crate bson;
 #[macro_use]
+extern crate chan;
+#[macro_use]
 extern crate clap;
 extern crate futures;
 extern crate mongodb;
@@ -14,6 +16,7 @@ extern crate tokio_io;
 extern crate tokio_proto;
 extern crate tokio_service;
 
+use chan::Receiver;
 use clap::{App, ArgMatches};
 use futures::{BoxFuture, Future};
 use proddle::{Message, ProddleError, ProddleProto};
@@ -25,7 +28,8 @@ mod mongodb_client;
 
 use mongodb_client::MongodbClient;
 
-use std::net::SocketAddr;
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::str::FromStr;
 
 fn parse_args(matches: &ArgMatches) -> Result<(SocketAddr, String, u16, String, String, String, String, String), ProddleError> {
@@ -63,11 +67,52 @@ pub fn main() {
     };
 
     //start bridge
-    let server = TcpServer::new(ProddleProto, socket_addr);
-    server.serve(|| Ok(Bridge));
+    //let server = TcpServer::new(ProddleProto, socket_addr);
+    //server.serve(|| Ok(Bridge));
+
+    //start stream threadpool
+    let (stream_tx, stream_rx) = chan::sync(0);
+    for _ in 0..8 {
+        let t_stream_rx: Receiver<TcpStream> = stream_rx.clone();
+        let _ = std::thread::spawn(move || {
+            let mut buf = vec![0; 1024];
+            loop {
+                chan_select! {
+                    t_stream_rx.recv() -> stream => {
+                        match stream {
+                            Some(mut stream) => {
+                                debug!("handling request from {}", stream.peer_addr().unwrap());
+                                match proddle::message_from_stream(&mut buf, &mut stream) {
+                                    Ok(Some(message)) => {
+                                        proddle::message_to_stream(&message, &mut stream);
+                                    },
+                                    Err(e) => error!("failed to decode message: {}", e),
+                                    _ => error!("failed to decode message"),
+                                }
+                            },
+                            None => error!("failed to recv stream"),
+                        }
+                    },
+                }
+            }
+        });
+    }
+
+    //start listener
+    let listener = match TcpListener::bind(socket_addr) {
+        Ok(listener) => listener,
+        Err(e) => panic!("failed to bind to address '{}': {}", socket_addr, e),
+    };
+
+    for stream in listener.incoming() {
+        match stream {
+            Ok(stream) => stream_tx.send(stream),
+            Err(e) => error!("recv connection failed: {}", e),
+        }
+    }
 }
 
-struct Bridge;
+/*struct Bridge;
 
 impl Service for Bridge {
     type Request = Message;
@@ -79,4 +124,4 @@ impl Service for Bridge {
         println!("req message type: {:?}", req.message_type);
         futures::future::ok(req).boxed()
     }
-}
+}*/

@@ -32,12 +32,13 @@ mod executor;
 mod measurement;
 mod operation_job;
 
-use client::{Client, ClientHandle};
+use client::Client;
 use executor::Executor;
 use operation_job::OperationJob;
 
 use std::collections::{BinaryHeap, HashMap};
-use std::net::SocketAddr;
+use std::io::{Read, Write};
+use std::net::{SocketAddr, TcpStream};
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -91,7 +92,7 @@ pub fn main() {
     };
 
     //attempt to automatically retrieve parameters if not supplied
-    if ip_address.eq("") {
+    /*if ip_address.eq("") {
         match find_ip_address() {
             Ok(ip) => {
                 info!("automatically retrieved ip address '{}'", ip);
@@ -99,17 +100,13 @@ pub fn main() {
             },
             Err(e) => panic!("failed to automatically determine ip address: {}. specify with -i flag.", e),
         }
-    }
+    }*/
 
     //initialize vantage data structures
     info!("initializing vantage data structures");
     let mut operations: HashMap<u64, BinaryHeap<OperationJob>> = HashMap::new();
     let mut operation_bucket_hashes: HashMap<u64, u64> = HashMap::new();
     let mut client = Client::new(socket_addr.clone());
-
-    //TODO - remove
-    let mut core = Core::new().unwrap();
-    let t_socket_addr = socket_addr.clone();
 
     //populate operations with buckets
     let mut counter = 0;
@@ -121,14 +118,14 @@ pub fn main() {
     }
 
     //initialize measurements and operations
-    match client.update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags) {
+    /*match client.update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags) {
         Ok(operations_updated) => {
             if operations_updated > 0 {
                 info!("updated {} operation(s)", operations_updated);
             }
         },
         Err(e) => error!("{}", e),
-    }
+    }*/
 
     //start recv measurement channel
     let (measurement_tx, measurement_rx) = chan::sync(50);
@@ -148,7 +145,6 @@ pub fn main() {
                 tick.recv() => {
                     if measurement_buffer.len() > 0 {
                         info!("sending {} measurements to bridge", measurement_buffer.len());
-                        //if let Err(e) = client::send_measurements(&mut measurement_buffer, &thread_bridge_address) {
                         if let Err(e) = client.send_measurements(&mut measurement_buffer) {
                             error!("failed to send measurements: {}", e);
                         };
@@ -161,8 +157,9 @@ pub fn main() {
     //start operation loop
     let mut executor = Executor::new(thread_count, &hostname, &ip_address, max_retries, measurement_tx);
 
-    /*let execute_operations_tick = chan::tick_ms(5 * 1000);
+    let execute_operations_tick = chan::tick_ms(5 * 1000);
     let bridge_update_tick = chan::tick_ms(bridge_update_interval_seconds * 1000);
+    let mut buf = vec![0; 1024];
     loop {
         chan_select! {
             execute_operations_tick.recv() => {
@@ -181,27 +178,10 @@ pub fn main() {
                 }
             }
         }
-    }*/
-
-    loop {
-        let handle = core.handle();
-        let client = match core.run(ClientHandle::connect(&t_socket_addr, &handle)) {
-            Ok(client) => client,
-            Err(e) => {
-                println!("failed to connect: {}", e);
-                continue
-            }
-        };
-        let message = Message::new_update_operations_request();
-        match core.run(client.call(message)) {
-            Ok(_) => println!("sent message"),
-            Err(e) => println!("failed to send: {}", e),
-        }
-
-        std::thread::sleep_ms(5000);
     }
 }
-
+/*
+TODO - remove
 fn find_ip_address() -> Result<String, ProddleError> {
     let mut easy = Easy::new();
     try!(easy.url("http://proddle.netsec.colostate.edu/check_ip.html"));
@@ -224,7 +204,7 @@ fn find_ip_address() -> Result<String, ProddleError> {
     }
 
     Ok(String::from_utf8_lossy(&content).into_owned())
-}
+}*/
 
 fn execute_operations(operations: &mut HashMap<u64, BinaryHeap<OperationJob>>, executor: &mut Executor) -> Result<(), ProddleError> {
     let now = time::now_utc().to_timespec().sec;
