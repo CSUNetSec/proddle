@@ -28,6 +28,6 @@ impl Hash for Operation {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Parameter {
-    name: String,
-    value: String,
+    pub name: String,
+    pub value: String,
 }

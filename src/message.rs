@@ -29,6 +29,18 @@ pub struct Message {
     pub send_measurements_response: Option<Vec<bool>>,
 }
 
+impl Message {
+    pub fn new_update_operations_request() -> Message {
+        Message {
+            message_type: MessageType::UpdateOperationsRequest,
+            update_operations_request: None,
+            update_operations_response: None,
+            send_measurements_request: None,
+            send_measurements_response: None,
+        }
+    }
+}
+
 pub struct MessageCodec;
 
 impl Encoder for MessageCodec {
@@ -48,7 +60,6 @@ impl Decoder for MessageCodec {
     type Error = std::io::Error;
 
     fn decode(&mut self, buf: &mut BytesMut) -> std::io::Result<Option<Message>> {
-        println!("decoded length: {}", buf.len());
         if buf.len() < 4 {
             return Ok(None);
         }

@@ -1,7 +1,5 @@
 #[macro_use(bson, doc)]
 extern crate bson;
-extern crate capnp;
-extern crate capnp_rpc;
 #[macro_use]
 extern crate chan;
 #[macro_use]
@@ -18,32 +16,39 @@ extern crate slog_term;
 extern crate time;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate tokio_proto;
+extern crate tokio_service;
 
 use bson::Bson;
 use clap::{App, ArgMatches};
 use curl::easy::Easy;
-use proddle::ProddleError;
+use proddle::{Message, ProddleError};
 use slog::{DrainExt, Logger};
+use tokio_core::reactor::Core;
+use tokio_service::Service;
 
 mod client;
 mod executor;
 mod measurement;
 mod operation_job;
 
+use client::{Client, ClientHandle};
 use executor::Executor;
 use operation_job::OperationJob;
 
 use std::collections::{BinaryHeap, HashMap};
+use std::net::SocketAddr;
+use std::str::FromStr;
 use std::time::Duration;
 
-fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, u64, usize, String, u32, i32, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
+fn parse_args<'a>(matches: &'a ArgMatches) -> Result<(String, String, u64, usize, SocketAddr, u32, i32, u32, HashMap<&'a str, i64>, Vec<&'a str>), ProddleError> {
     let hostname = try!(value_t!(matches, "HOSTNAME", String));
     let ip_address = try!(value_t!(matches, "IP_ADDRESS", String));
     let bucket_count = try!(value_t!(matches.value_of("BUCKET_COUNT"), u64));
     let thread_count = try!(value_t!(matches.value_of("THREAD_COUNT"), usize));
     let bridge_ip_address = try!(matches.value_of("BRIDGE_IP_ADDRESS").ok_or("failed to parse bridge ip address"));
     let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
-    let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
+    let bridge_address = try!(SocketAddr::from_str(&format!("{}:{}", bridge_ip_address, bridge_port)));
     let bridge_update_interval_seconds = try!(value_t!(matches.value_of("BRIDGE_UPDATE_INTERVAL_SECONDS"), u32));
     let max_retries = try!(value_t!(matches.value_of("MAX_RETRIES"), i32));
     let send_measurements_interval_seconds = try!(value_t!(matches.value_of("SEND_MEASUREMENTS_INTERVAL_SECONDS"), u32));
@@ -79,7 +84,7 @@ pub fn main() {
     
     //initialize vantage parameters
     info!("parsing command line arguments");
-    let (hostname, mut ip_address, bucket_count, thread_count, bridge_address, bridge_update_interval_seconds, 
+    let (hostname, mut ip_address, bucket_count, thread_count, socket_addr, bridge_update_interval_seconds, 
             max_retries, send_measurements_interval_seconds, include_tags, exclude_tags) = match parse_args(&matches) {
         Ok(args) => args,
         Err(e) => panic!("{}", e),
@@ -100,6 +105,11 @@ pub fn main() {
     info!("initializing vantage data structures");
     let mut operations: HashMap<u64, BinaryHeap<OperationJob>> = HashMap::new();
     let mut operation_bucket_hashes: HashMap<u64, u64> = HashMap::new();
+    let mut client = Client::new(socket_addr.clone());
+
+    //TODO - remove
+    let mut core = Core::new().unwrap();
+    let t_socket_addr = socket_addr.clone();
 
     //populate operations with buckets
     let mut counter = 0;
@@ -111,7 +121,7 @@ pub fn main() {
     }
 
     //initialize measurements and operations
-    match client::update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags, &bridge_address) {
+    match client.update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags) {
         Ok(operations_updated) => {
             if operations_updated > 0 {
                 info!("updated {} operation(s)", operations_updated);
@@ -122,10 +132,10 @@ pub fn main() {
 
     //start recv measurement channel
     let (measurement_tx, measurement_rx) = chan::sync(50);
-    let thread_bridge_address = bridge_address.clone();
     std::thread::spawn(move || {
         let mut measurement_buffer: Vec<Bson> = Vec::new();
         let tick = chan::tick_ms(send_measurements_interval_seconds * 1000);
+        let mut client = Client::new(socket_addr.clone());
 
         loop {
             chan_select! {
@@ -138,7 +148,8 @@ pub fn main() {
                 tick.recv() => {
                     if measurement_buffer.len() > 0 {
                         info!("sending {} measurements to bridge", measurement_buffer.len());
-                        if let Err(e) = client::send_measurements(&mut measurement_buffer, &thread_bridge_address) {
+                        //if let Err(e) = client::send_measurements(&mut measurement_buffer, &thread_bridge_address) {
+                        if let Err(e) = client.send_measurements(&mut measurement_buffer) {
                             error!("failed to send measurements: {}", e);
                         };
                     }
@@ -150,7 +161,7 @@ pub fn main() {
     //start operation loop
     let mut executor = Executor::new(thread_count, &hostname, &ip_address, max_retries, measurement_tx);
 
-    let execute_operations_tick = chan::tick_ms(5 * 1000);
+    /*let execute_operations_tick = chan::tick_ms(5 * 1000);
     let bridge_update_tick = chan::tick_ms(bridge_update_interval_seconds * 1000);
     loop {
         chan_select! {
@@ -160,7 +171,7 @@ pub fn main() {
                 }
             },
             bridge_update_tick.recv() => {
-                match client::update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags, &bridge_address) {
+                match client.update_operations(&mut operations, &mut operation_bucket_hashes, &include_tags, &exclude_tags) {
                     Ok(operations_updated) => {
                         if operations_updated > 0 {
                             info!("updated {} operation(s)", operations_updated);
@@ -170,6 +181,24 @@ pub fn main() {
                 }
             }
         }
+    }*/
+
+    loop {
+        let handle = core.handle();
+        let client = match core.run(ClientHandle::connect(&t_socket_addr, &handle)) {
+            Ok(client) => client,
+            Err(e) => {
+                println!("failed to connect: {}", e);
+                continue
+            }
+        };
+        let message = Message::new_update_operations_request();
+        match core.run(client.call(message)) {
+            Ok(_) => println!("sent message"),
+            Err(e) => println!("failed to send: {}", e),
+        }
+
+        std::thread::sleep_ms(5000);
     }
 }
 

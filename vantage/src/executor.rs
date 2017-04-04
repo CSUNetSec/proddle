@@ -54,10 +54,8 @@ impl Executor {
 fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, max_retries: i32, tx: Sender<Bson>) -> Result<(), ProddleError> {
     //create measurement arguments
     let mut parameters = HashMap::new();
-    if let Some(operation_parameters) = operation_job.operation.parameters {
-        for operation_parameter in operation_parameters {
-            parameters.insert(operation_parameter.name, operation_parameter.value);
-        }
+    for operation_parameter in operation_job.operation.parameters {
+        parameters.insert(operation_parameter.name, operation_parameter.value);
     }
 
     for i in 0..max_retries {
