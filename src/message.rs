@@ -1,14 +1,17 @@
 use bincode::{self, Infinite};
 use bytes::{BigEndian, Buf, BufMut, BytesMut};
-use tokio_io::codec::{Encoder, Decoder};
+use tokio_io::{AsyncRead, AsyncWrite};
+use tokio_io::codec::{Decoder, Encoder, Framed};
+use tokio_proto::pipeline::{ClientProto, ServerProto};
 
 use error::ProddleError;
 use operation::Operation;
 
+use std;
 use std::collections::HashMap;
 use std::io::Cursor;
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum MessageType {
     Dummy,
     UpdateOperationsRequest,
@@ -19,20 +22,20 @@ pub enum MessageType {
 
 #[derive(Clone, Deserialize, Serialize)]
 pub struct Message {
-    message_type: MessageType,
-    update_operations_request: Option<HashMap<u64, u64>>,
-    update_operations_response: Option<HashMap<u64, Vec<Operation>>>,
-    send_measurements_request: Option<Vec<String>>,
-    send_measurements_response: Option<Vec<bool>>,
+    pub message_type: MessageType,
+    pub update_operations_request: Option<HashMap<u64, u64>>,
+    pub update_operations_response: Option<HashMap<u64, Vec<Operation>>>,
+    pub send_measurements_request: Option<Vec<String>>,
+    pub send_measurements_response: Option<Vec<bool>>,
 }
 
 pub struct MessageCodec;
 
 impl Encoder for MessageCodec {
     type Item = Message;
-    type Error = ProddleError;
+    type Error = std::io::Error;
 
-    fn encode(&mut self, msg: Message, buf: &mut BytesMut) -> Result<(), ProddleError> {
+    fn encode(&mut self, msg: Message, buf: &mut BytesMut) -> std::io::Result<()> {
         let encoded: Vec<u8> = bincode::serialize(&msg, Infinite).unwrap();
         buf.put_u32::<BigEndian>(4 + encoded.len() as u32);
         buf.put_slice(&encoded);
@@ -42,9 +45,9 @@ impl Encoder for MessageCodec {
 
 impl Decoder for MessageCodec {
     type Item = Message;
-    type Error = ProddleError;
+    type Error = std::io::Error;
 
-    fn decode(&mut self, buf: &mut BytesMut) -> Result<Option<Message>, ProddleError> {
+    fn decode(&mut self, buf: &mut BytesMut) -> std::io::Result<Option<Message>> {
         println!("decoded length: {}", buf.len());
         if buf.len() < 4 {
             return Ok(None);
@@ -59,6 +62,30 @@ impl Decoder for MessageCodec {
 
         let message = bincode::deserialize(&buf[4..]).unwrap();
         Ok(Some(message))
+    }
+}
+
+pub struct ProddleProto;
+
+impl<T: AsyncRead + AsyncWrite + 'static> ServerProto<T> for ProddleProto {
+    type Request = Message;
+    type Response = Message;
+    type Transport = Framed<T, MessageCodec>;
+    type BindTransport = Result<Self::Transport, std::io::Error>;
+
+    fn bind_transport(&self, io: T) -> Self::BindTransport {
+        Ok(io.framed(MessageCodec))
+    }
+}
+
+impl<T: AsyncRead + AsyncWrite + 'static> ClientProto<T> for ProddleProto {
+    type Request = Message;
+    type Response = Message;
+    type Transport = Framed<T, MessageCodec>;
+    type BindTransport = Result<Self::Transport, std::io::Error>;
+
+    fn bind_transport(&self, io: T) -> Self::BindTransport {
+        Ok(io.framed(MessageCodec))
     }
 }
 

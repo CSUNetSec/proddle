@@ -1,7 +1,4 @@
 extern crate bson;
-extern crate capnp;
-#[macro_use]
-extern crate capnp_rpc;
 #[macro_use]
 extern crate clap;
 extern crate futures;
@@ -13,33 +10,28 @@ extern crate slog;
 extern crate slog_scope;
 extern crate slog_term;
 extern crate serde_json;
-extern crate tokio_core;
 extern crate tokio_io;
+extern crate tokio_proto;
+extern crate tokio_service;
 
-use capnp_rpc::RpcSystem;
-use capnp_rpc::twoparty::VatNetwork;
-use capnp_rpc::rpc_twoparty_capnp::Side;
 use clap::{App, ArgMatches};
-use futures::{Future, Stream};
-use mongodb::{Client, ClientOptions, ThreadedClient};
-use proddle::ProddleError;
-use proddle::proddle_capnp::proddle::ToClient;
+use futures::{BoxFuture, Future};
+use proddle::{Message, ProddleError, ProddleProto};
 use slog::{DrainExt, Logger};
-use tokio_core::net::TcpListener;
-use tokio_core::reactor::Core;
-use tokio_io::AsyncRead;
+use tokio_proto::TcpServer;
+use tokio_service::Service;
 
-mod server;
+mod mongodb_client;
 
-use server::ServerImpl;
+use mongodb_client::MongodbClient;
 
 use std::net::SocketAddr;
 use std::str::FromStr;
 
-fn parse_args(matches: &ArgMatches) -> Result<(String, String, u16, String, String, String, String, String), ProddleError> {
+fn parse_args(matches: &ArgMatches) -> Result<(SocketAddr, String, u16, String, String, String, String, String), ProddleError> {
     let bridge_ip_address = try!(value_t!(matches, "BRIDGE_IP_ADDRESS", String));
     let bridge_port = try!(value_t!(matches.value_of("BRIDGE_PORT"), u16));
-    let bridge_address = format!("{}:{}", bridge_ip_address, bridge_port);
+    let bridge_address = try!(SocketAddr::from_str(&format!("{}:{}", bridge_ip_address, bridge_port)));
     let mongodb_ip_address = try!(value_t!(matches, "MONGODB_IP_ADDRESS", String));
     let mongodb_port = try!(value_t!(matches.value_of("MONGODB_PORT"), u16));
     let ca_file = try!(value_t!(matches.value_of("CA_FILE"), String));
@@ -58,52 +50,33 @@ pub fn main() {
 
     //initialize bridge parameters
     info!("parsing command line arguments");
-    let (bridge_address, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file, username, password) = match parse_args(&matches) {
+    let (socket_addr, mongodb_ip_address, mongodb_port, ca_file, certificate_file, key_file, username, password) = match parse_args(&matches) {
         Ok(args) => args,
         Err(e) => panic!("{}", e),
     };
 
-    //pasre socket address
-    let socket_addr = match SocketAddr::from_str(&bridge_address) {
-        Ok(socket_addr) => socket_addr,
-        Err(e) => panic!("failed to parse socket address: {}", e),
-    };
-
-    //initialize tokio core
-    let mut core = Core::new().unwrap();
-    let handle = core.handle();
-    let socket = TcpListener::bind(&socket_addr, &handle).unwrap();
-
-    //connect to mongodb
-    let client_result = if ca_file.eq("") && certificate_file.eq("") && key_file.eq("") {
-        Client::connect(&mongodb_ip_address, mongodb_port)
-    } else {
-        let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
-        Client::connect_with_options(&mongodb_ip_address, mongodb_port, client_options)
-    };
-
-    let client = match client_result {
-        Ok(client) => client,
+    //connect to mongodb client
+    let mongodb_client = match MongodbClient::new(&mongodb_ip_address, mongodb_port, &username, 
+                                                  &password, &ca_file, &certificate_file, &key_file) {
+        Ok(mongodb_client) => mongodb_client,
         Err(e) => panic!("failed to connect to mongodb: {}", e),
     };
 
-    //initialize proddle bridge
-    info!("initializing bridge data strucutes");
-    let proddle = ToClient::new(ServerImpl::new(client, username, password)).from_server::<capnp_rpc::Server>();
-    
-    //start rpc loop
-    info!("service started");
-    let done = socket.incoming().for_each(move |(socket, _addr)| {
-        try!(socket.set_nodelay(true));
-        let (reader, writer) = socket.split();
+    //start bridge
+    let server = TcpServer::new(ProddleProto, socket_addr);
+    server.serve(|| Ok(Bridge));
+}
 
-        let handle = handle.clone();
-        let network = VatNetwork::new(reader, writer, Side::Server, Default::default());
-        let rpc_system = RpcSystem::new(Box::new(network), Some(proddle.clone().client));
-        handle.spawn(rpc_system.map_err(|e| error!("{:?}", e)));
-        
-        Ok(())
-    });
+struct Bridge;
 
-    core.run(done).unwrap();
+impl Service for Bridge {
+    type Request = Message;
+    type Response = Message;
+    type Error = ProddleError;
+    type Future = BoxFuture<Self::Response, Self::Error>;
+
+    fn call(&self, req: Self::Request) -> Self::Future {
+        println!("req message type: {:?}", req.message_type);
+        futures::future::ok(req).boxed()
+    }
 }

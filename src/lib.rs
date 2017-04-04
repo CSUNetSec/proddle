@@ -8,13 +8,14 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate tokio_io;
+extern crate tokio_proto;
 
 mod error;
 mod message;
 mod operation;
 
 pub use self::error::ProddleError;
-pub use self::message::Message;
+pub use self::message::{Message, ProddleProto};
 pub use self::operation::Operation;
 
 use bson::ordered::OrderedDocument;

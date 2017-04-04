@@ -6,6 +6,12 @@ extern crate mongodb;
 use std;
 use std::fmt::{Display, Formatter, Result};
 
+impl From<ProddleError> for std::io::Error {
+    fn from(err: ProddleError) -> std::io::Error {
+        std::io::Error::new(std::io::ErrorKind::Other, format!("{}", err))
+    }
+}
+
 #[derive(Debug)]
 pub enum ProddleError {
     AddrParse(std::net::AddrParseError),
