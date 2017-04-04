@@ -35,6 +35,7 @@ impl Client {
         match response.message_type {
             MessageType::SendMeasurementsResponse => {
                 //TODO handle send measurements response
+                measurement_buffer.clear();
                 Ok(())
             },
             _ => Err(ProddleError::from("failed to receive SendMeasurementsResponse."))

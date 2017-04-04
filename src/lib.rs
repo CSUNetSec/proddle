@@ -31,7 +31,7 @@ pub enum MessageType {
 pub struct Message {
     pub message_type: MessageType,
     pub update_operations_request: Option<HashMap<u64, u64>>,
-    pub update_operations_response: Option<HashMap<u64, Vec<Operation>>>,
+    pub update_operations_response: Option<(HashMap<u64, u64>, HashMap<u64, Vec<Operation>>)>,
     pub send_measurements_request: Option<Vec<String>>,
     pub send_measurements_response: Option<Vec<usize>>,
 }
@@ -47,11 +47,11 @@ impl Message {
         }
     }
 
-    pub fn update_operations_response(operation_buckets: HashMap<u64, Vec<Operation>>) -> Message {
+    pub fn update_operations_response(operation_bucket_hashes: HashMap<u64, u64>, operation_buckets: HashMap<u64, Vec<Operation>>) -> Message {
         Message {
             message_type: MessageType::UpdateOperationsResponse,
             update_operations_request: None,
-            update_operations_response: Some(operation_buckets),
+            update_operations_response: Some((operation_bucket_hashes, operation_buckets)),
             send_measurements_request: None,
             send_measurements_response: None,
         }

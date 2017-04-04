@@ -65,7 +65,8 @@ impl DbWrapper {
         Ok(measurement_failures)
     }
 
-    pub fn update_operations(&self, operation_bucket_hashes: HashMap<u64, u64>) -> Result<HashMap<u64, Vec<Operation>>, ProddleError> {
+    pub fn update_operations(&self, operation_bucket_hashes: HashMap<u64, u64>) 
+        -> Result<(HashMap<u64, u64>, HashMap<u64, Vec<Operation>>), ProddleError> {
         //connect to db
         let db = try!(connect(&self.inner, &self.username, &self.password, "proddle"));
  
@@ -98,15 +99,18 @@ impl DbWrapper {
         }
 
         //compare vantage hashes to bridge hashes
+        let mut n_operation_bucket_hashes = HashMap::new();
         for (key, value) in operation_bucket_hashes.iter() {
             //if vantage hash equals bridge hash remove vector of operations from operations
             let s_operation_bucket_hash = s_operation_bucket_hashes.get(&key).unwrap().finish();
             if s_operation_bucket_hash == *value {
                 s_operations.remove(&key);
+            } else {
+                n_operation_bucket_hashes.insert(*key, s_operation_bucket_hash);
             }
         }
 
-        Ok(s_operations)
+        Ok((n_operation_bucket_hashes, s_operations))
     }
 }
 

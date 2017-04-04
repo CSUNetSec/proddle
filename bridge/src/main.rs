@@ -115,9 +115,9 @@ fn handle_stream(stream: &mut TcpStream, db_wrapper: &DbWrapper) -> Result<(), P
         MessageType::UpdateOperationsRequest => {
             match request.update_operations_request {
                 Some(operation_bucket_hashes) => {
-                    let operation_buckets = try!(db_wrapper.update_operations(operation_bucket_hashes));
+                    let (operation_bucket_hashes, operation_buckets) = try!(db_wrapper.update_operations(operation_bucket_hashes));
                     info!("{}: updating {} operation bucket(s)", stream.peer_addr().unwrap(), operation_buckets.len());
-                    let message = Message::update_operations_response(operation_buckets);
+                    let message = Message::update_operations_response(operation_bucket_hashes, operation_buckets);
                     try!(proddle::message_to_stream(&message, stream));
                     Ok(())
                 },
