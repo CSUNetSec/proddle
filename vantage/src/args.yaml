@@ -15,12 +15,6 @@ args:
         takes_value: true
         default_value: ""
         help: Ip address of vantage. If not provided automatic retrieval is attempted.
-    - MEASUREMENTS_DIRECTORY:
-        short: d
-        long: measurements_directory
-        takes_value: true
-        default_value: /tmp
-        help: Directory to store measurement python scripts.
     - BUCKET_COUNT:
         short: b
         long: bucket_count
