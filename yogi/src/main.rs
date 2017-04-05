@@ -56,10 +56,6 @@ fn main() {
     let result = if let Some(matches) = matches.subcommand_matches("operation") {
         if let Some(matches) = matches.subcommand_matches("add") {
             operation::add(&db, matches)
-        } else if let Some(matches) = matches.subcommand_matches("delete") {
-            operation::delete(&db, matches)
-        } else if let Some(matches) = matches.subcommand_matches("search") {
-            operation::search(&db, matches)
         } else {
             panic!("operation unreachable");
         }

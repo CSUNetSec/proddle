@@ -1,13 +1,13 @@
 use bson::{self, Bson};
 use clap::ArgMatches;
 use mongodb::db::{Database, ThreadedDatabase};
-use proddle::{self, Operation, Parameter, ProddleError};
+use proddle::{Operation, Parameter, ProddleError};
 use time;
 
 pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
     let measurement_class = try!(value_t!(matches, "MEASUREMENT_CLASS", String));
     let domain = try!(value_t!(matches, "DOMAIN", String));
-    let parameters: Option<Vec<Parameter>> = match matches.values_of("PARAMETER") {
+    let parameters: Vec<Parameter> = match matches.values_of("PARAMETER") {
         Some(parameters) => {
             let mut params = Vec::new();
             for parameter in parameters {
@@ -23,21 +23,18 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
                 );
             }
 
-            Some(params)
+            params
         },
-        None => None,
+        None => Vec::new(),
     };
 
-    let tags: Option<Vec<String>> = match matches.values_of("TAG") {
-        Some(tags) => Some(tags.map(|x| x.to_owned()).collect()),
-        None => None,
+    let tags: Vec<String> = match matches.values_of("TAG") {
+        Some(tags) => tags.map(|x| x.to_owned()).collect(),
+        None => Vec::new(),
     };
-
-    //check if measurement exists
-    try!(proddle::find_measurement(db, &measurement_class, None, true));
 
     //create opeation document
-    let timestamp = Some(time::now_utc().to_timespec().sec);
+    let timestamp = time::now_utc().to_timespec().sec;
     let operation = Operation {
         timestamp: timestamp,
         measurement_class: measurement_class,
@@ -51,21 +48,6 @@ pub fn add(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
         try!(db.collection("operations").insert_one(document, None));
     } else {
         return Err(ProddleError::from("failed to parse Operation into OrdererdDocument"));
-    }
-
-    Ok(())
-}
-
-pub fn delete(_: &Database, _: &ArgMatches) -> Result<(), ProddleError> {
-    unimplemented!();
-}
-
-pub fn search(db: &Database, matches: &ArgMatches) -> Result<(), ProddleError> {
-    let domain = try!(value_t!(matches, "DOMAIN", String));
-
-    let cursor = try!(proddle::find_operations(db, Some(&domain), None, None, true));
-    for document in cursor {
-        println!("{:?}", document);
     }
 
     Ok(())
