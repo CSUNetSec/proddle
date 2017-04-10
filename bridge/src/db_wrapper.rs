@@ -3,6 +3,7 @@ use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::{Database, ThreadedDatabase};
 use proddle::{Operation, ProddleError};
 use serde_json;
+use serde_json::Value;
 
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::DefaultHasher;
@@ -39,21 +40,22 @@ impl DbWrapper {
 
         let mut measurement_failures = Vec::new();
         for (i, measurement) in measurements.iter().enumerate() {
-            //parse string into Bson::Document
-            match serde_json::from_str(measurement) {
+
+            //convert string to json value
+            match serde_json::from_str::<Value>(&measurement) {
                 Ok(json) => {
-                    match Bson::from_json(&json) {
+                    //convert json value into bson document
+                    match json.into() {
                         Bson::Document(document) => {
-                            //insert document
                             if let Err(e) = db.collection("measurements").insert_one(document, None) {
                                 error!("failed to insert measurement: {}", e);
                             }
                         },
-                        _ => {
+                        _=> {
                             error!("failed to parse json as Bson::Document");
                             measurement_failures.push(i);
                         },
-                    }
+                    };
                 },
                 Err(e) => {
                     error!("failed to parse measurement '{}': {}", measurement, e);

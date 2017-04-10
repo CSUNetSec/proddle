@@ -7,6 +7,7 @@ use std::collections::{BinaryHeap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::net::{SocketAddr, TcpStream};
+use std::time::Duration;
 
 pub struct Client {
     socket_addr: SocketAddr,
@@ -22,6 +23,8 @@ impl Client {
     pub fn send_measurements(&mut self, measurement_buffer: &mut Vec<Bson>) -> Result<(), ProddleError> {
         //open stream
         let mut stream = try!(TcpStream::connect(self.socket_addr));
+        try!(stream.set_read_timeout(Some(Duration::new(45, 0))));
+        try!(stream.set_write_timeout(Some(Duration::new(45, 0))));
 
         //create request
         let measurements: Vec<String> = measurement_buffer.iter().map(|bson| bson.to_json().to_string()).collect();
@@ -51,6 +54,8 @@ impl Client {
                              exclude_tags: &Vec<&str>) -> Result<i32, ProddleError> {
         //open stream
         let mut stream = try!(TcpStream::connect(self.socket_addr));
+        try!(stream.set_read_timeout(Some(Duration::new(45, 0))));
+        try!(stream.set_write_timeout(Some(Duration::new(45, 0))));
 
         //create request
         let request = Message::update_operations_request(operation_bucket_hashes.clone());

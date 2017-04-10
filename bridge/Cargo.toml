@@ -9,7 +9,7 @@ chan = "0.1"
 clap = {version = "2.19", features = ["yaml"]}
 mongodb = {version = "0.2", features = ["ssl"]}
 proddle = {path = "../"}
-serde_json = "0.9"
+serde_json = "0.9" 
 slog = "1.5"
 slog-scope = "0.2"
 slog-term = "1.5"

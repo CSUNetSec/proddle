@@ -23,6 +23,7 @@ use db_wrapper::DbWrapper;
 use std::net::{SocketAddr, TcpListener, TcpStream};
 use std::str::FromStr;
 use std::sync::{Arc, RwLock};
+use std::time::Duration;
 
 fn parse_args(matches: &ArgMatches) -> Result<(SocketAddr, String, u16, String, String, String, String, String), ProddleError> {
     let bridge_ip_address = try!(value_t!(matches, "BRIDGE_IP_ADDRESS", String));
@@ -97,6 +98,9 @@ pub fn main() {
 }
 
 fn handle_stream(stream: &mut TcpStream, db_wrapper: &DbWrapper) -> Result<(), ProddleError> {
+    try!(stream.set_read_timeout(Some(Duration::new(45, 0))));
+    try!(stream.set_write_timeout(Some(Duration::new(45, 0))));
+
     let request = try!(proddle::message_from_stream(stream));
     match request.message_type {
         MessageType::SendMeasurementsRequest => {

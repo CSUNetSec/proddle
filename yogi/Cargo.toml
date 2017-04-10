@@ -4,7 +4,7 @@ version = "0.2.4"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
-bson = "0.4"
+bson = "0.6"
 clap = {version = "2.19", features = ["yaml"]}
 mongodb = {version = "0.2", features = ["ssl"]}
 proddle = {path = "../"}
