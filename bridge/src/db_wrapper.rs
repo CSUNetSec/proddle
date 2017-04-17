@@ -2,12 +2,11 @@ use bson::{self, Bson};
 use mongodb::{Client, ClientOptions, ThreadedClient};
 use mongodb::db::{Database, ThreadedDatabase};
 use proddle::{Operation, ProddleError};
-use serde_json;
-use serde_json::Value;
 
 use std::collections::{BTreeMap, HashMap};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::io::Cursor;
 
 pub struct DbWrapper {
     inner: Client,
@@ -34,33 +33,24 @@ impl DbWrapper {
         )
     }
 
-    pub fn send_measurements(&self, measurements: Vec<String>) -> Result<Vec<usize>, ProddleError> {
+    pub fn send_measurements(&self, measurements: Vec<Vec<u8>>) -> Result<Vec<usize>, ProddleError> {
         //connect to db
         let db = try!(connect(&self.inner, &self.username, &self.password, "proddle"));
 
         let mut measurement_failures = Vec::new();
         for (i, measurement) in measurements.iter().enumerate() {
-
-            //convert string to json value
-            match serde_json::from_str::<Value>(&measurement) {
-                Ok(json) => {
-                    //convert json value into bson document
-                    match json.into() {
-                        Bson::Document(document) => {
-                            if let Err(e) = db.collection("measurements").insert_one(document, None) {
-                                error!("failed to insert measurement: {}", e);
-                            }
-                        },
-                        _=> {
-                            error!("failed to parse json as Bson::Document");
-                            measurement_failures.push(i);
-                        },
-                    };
+            //parse as document
+            let mut cursor = Cursor::new(measurement);
+            match bson::decode_document(&mut cursor) {
+                Ok(document) => {
+                    if let Err(e) = db.collection("measurements").insert_one(document, None) {
+                        error!("failed to insert measurement: {}", e);
+                    }
                 },
                 Err(e) => {
-                    error!("failed to parse measurement '{}': {}", measurement, e);
+                    error!("failed to decode measurement: {}", e);
                     measurement_failures.push(i);
-                },
+                }
             }
         }
         

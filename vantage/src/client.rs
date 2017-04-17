@@ -1,4 +1,4 @@
-use bson::Bson;
+use bson::{self, Document};
 use proddle::{self, Message, MessageType, ProddleError};
 
 use operation_job::OperationJob;
@@ -20,14 +20,19 @@ impl Client {
         }
     }
 
-    pub fn send_measurements(&mut self, measurement_buffer: &mut Vec<Bson>) -> Result<(), ProddleError> {
+    pub fn send_measurements(&mut self, measurement_buffer: &mut Vec<Document>) -> Result<(), ProddleError> {
         //open stream
         let mut stream = try!(TcpStream::connect(self.socket_addr));
         try!(stream.set_read_timeout(Some(Duration::new(45, 0))));
         try!(stream.set_write_timeout(Some(Duration::new(45, 0))));
 
         //create request
-        let measurements: Vec<String> = measurement_buffer.iter().map(|bson| bson.to_json().to_string()).collect();
+        let mut measurements = Vec::new();
+        for measurement in measurement_buffer.iter() {
+            let mut encoded = Vec::new();
+            try!(bson::encode_document(&mut encoded, measurement));
+            measurements.push(encoded);
+        }
         let request = Message::send_measurements_request(measurements);
 
         //send request and recv response

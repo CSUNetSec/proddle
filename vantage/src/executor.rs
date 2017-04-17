@@ -1,4 +1,4 @@
-use bson::Bson;
+use bson::Document;
 use chan::{self, Sender};
 use proddle::ProddleError;
 use rand::{self, Rng};
@@ -15,7 +15,7 @@ pub struct Executor {
 }
 
 impl Executor {
-    pub fn new(thread_count: usize, hostname: &str, ip_address: &str, max_retries: i32, measurement_tx: Sender<Bson>) -> Executor {
+    pub fn new(thread_count: usize, hostname: &str, ip_address: &str, max_retries: i32, measurement_tx: Sender<Document>) -> Executor {
         let (operation_tx, operation_rx) = chan::sync(0);
         for _ in 0..thread_count {
             let thread_operation_rx = operation_rx.clone();
@@ -51,7 +51,7 @@ impl Executor {
     }
 }
 
-fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, max_retries: i32, tx: Sender<Bson>) -> Result<(), ProddleError> {
+fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: &str, max_retries: i32, tx: Sender<Document>) -> Result<(), ProddleError> {
     //create measurement arguments
     let mut parameters = HashMap::new();
     for operation_parameter in operation_job.operation.parameters {
@@ -61,19 +61,9 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
     for i in 0..max_retries {
         //execute measurement
         let timestamp = time::now_utc().to_timespec().sec;
-        let measurement_result = match operation_job.operation.measurement_class.as_ref() {
-            "HttpGet" => measurement::http_get::execute(&operation_job.operation.domain, &parameters),
+        let mut document = match operation_job.operation.measurement_class.as_ref() {
+            "HttpGet" => measurement::http_get::execute(&operation_job.operation.domain, &parameters)?,
             _ => return Err(ProddleError::from(format!("Unknown measurement class '{}'.", operation_job.operation.measurement_class))),
-        };
-
-        //parse result
-        let mut document = match measurement_result {
-            Ok(Bson::Document(document)) => document,
-            Err(e) => {
-                error!("{}", e); //unknown error
-                break;
-            },
-            _ => return Err(ProddleError::from("Failed to parse measurement result as Bson::Document")),
         };
 
         document.insert_bson(String::from("timestamp"), bson!(timestamp));
@@ -85,15 +75,15 @@ fn execute_measurement(operation_job: OperationJob, hostname: &str, ip_address: 
         //check for errors and handle if necessary
         if document.contains_key("internal_error_message") {
             //if internal error - send document and break
-            tx.send(Bson::Document(document));
+            tx.send(document);
             break;
         } else if document.contains_key("measurement_error_message") {
             //if measurement error - send document and try again
             document.insert_bson(String::from("remaining_attempts"), bson!(max_retries - 1 - i));
-            tx.send(Bson::Document(document));
+            tx.send(document);
         } else {
             //if no error - send document and break
-            tx.send(Bson::Document(document));
+            tx.send(document);
             break;
         }
 

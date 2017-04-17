@@ -34,7 +34,7 @@ pub struct Message {
     pub error: Option<String>,
     pub update_operations_request: Option<HashMap<u64, u64>>,
     pub update_operations_response: Option<HashMap<u64, Vec<Operation>>>,
-    pub send_measurements_request: Option<Vec<String>>,
+    pub send_measurements_request: Option<Vec<Vec<u8>>>,
     pub send_measurements_response: Option<Vec<usize>>,
 }
 
@@ -72,7 +72,7 @@ impl Message {
         }
     }
 
-    pub fn send_measurements_request(measurements: Vec<String>) -> Message {
+    pub fn send_measurements_request(measurements: Vec<Vec<u8>>) -> Message {
         Message {
             message_type: MessageType::SendMeasurementsRequest,
             error: None,

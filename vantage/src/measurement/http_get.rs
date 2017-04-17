@@ -1,4 +1,4 @@
-use bson::Bson;
+use bson::{Bson, Document};
 use curl::easy::{Easy, List};
 
 use proddle::ProddleError;
@@ -8,7 +8,7 @@ use std::time::Duration;
 
 static PREFIXES: [&'static str; 2] = ["", "www."];
 
-pub fn execute(domain: &str, parameters: &HashMap<String, String>) -> Result<Bson, ProddleError> {
+pub fn execute(domain: &str, parameters: &HashMap<String, String>) -> Result<Document, ProddleError> {
     let mut easy: Option<Easy> = None;
     let (mut internal_error_message, mut measurement_error_message) = (None, None);
     let mut headers = Vec::new();
@@ -111,7 +111,7 @@ pub fn execute(domain: &str, parameters: &HashMap<String, String>) -> Result<Bso
         }
     }
 
-    Ok(Bson::Document(document))
+    Ok(document)
 }
 
 fn parse_time(duration: &Duration) -> f64 {

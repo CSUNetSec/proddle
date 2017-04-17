@@ -14,7 +14,7 @@ extern crate slog_scope;
 extern crate slog_term;
 extern crate time;
 
-use bson::Bson;
+use bson::Document;
 use clap::{App, ArgMatches};
 use proddle::ProddleError;
 use slog::{DrainExt, Logger};
@@ -114,7 +114,7 @@ pub fn main() {
     let (measurement_tx, measurement_rx) = chan::sync(50);
     let t_client = client.clone();
     std::thread::spawn(move || {
-        let mut measurement_buffer: Vec<Bson> = Vec::new();
+        let mut measurement_buffer: Vec<Document> = Vec::new();
         let tick = chan::tick_ms(send_measurements_interval_seconds * 1000);
 
         loop {

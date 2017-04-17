@@ -10,7 +10,6 @@ extern crate slog;
 #[macro_use]
 extern crate slog_scope;
 extern crate slog_term;
-extern crate serde_json;
 
 use chan::Receiver;
 use clap::{App, ArgMatches};
