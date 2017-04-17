@@ -125,6 +125,7 @@ fn send_request(url: &str, timeout: u64, headers: &mut Vec<String>, content: &mu
     try!(easy.get(true));
     try!(easy.timeout(Duration::new(timeout, 0))); //30 second timeout
     try!(easy.follow_location(true)); //follow redirects
+    try!(easy.max_redirections(5));
     try!(easy.http_transfer_decoding(true)); //request compressed http response
     try!(easy.accept_encoding("")); //accept all supported encodings
     try!(easy.useragent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/57.0.2987.110 Safari/537.36"));
