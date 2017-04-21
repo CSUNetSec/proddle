@@ -69,37 +69,37 @@ if __name__ == "__main__":
     labels = compute(distance_matrix, float(sys.argv[2]), int(sys.argv[3]))
 
     #print measurements and labels
-    for i in range(0, len(measurements)):
-        label = labels[i]
-        timestamp = measurements[i]["timestamp"]
-        domain = measurements[i]["measurement_domain"]
-        error_fields = measurements[i]["measurement_error_message"].split()
-        error_code = error_fields[0].replace("[", "").replace("]", "")
-        vantage = measurements[i]["vantage_hostname"]
-        ip = measurements[i]["vantage_ip_address"]
-        print "%d\t%d\t%s\t%s\t%s\t%s" % (label, timestamp, domain, error_code, vantage, ip)
+    #for i in range(0, len(measurements)):
+    #    label = labels[i]
+    #    timestamp = measurements[i]["timestamp"]
+    #    domain = measurements[i]["measurement_domain"]
+    #    error_fields = measurements[i]["measurement_error_message"].split()
+    #    error_code = error_fields[0].replace("[", "").replace("]", "")
+    #    vantage = measurements[i]["vantage_hostname"]
+    #    ip = measurements[i]["vantage_ip_address"]
+    #    print "%d\t%d\t%s\t%s\t%s\t%s" % (label, timestamp, domain, error_code, vantage, ip)
 
     #print graphml
-    #print "<graphml>"
-    #print "\t<key id=\"d0\" for=\"node\" attr.name=\"Modularity Class\" attr.type=\"integer\"/>"
-    #print "\t<key id=\"d1\" for=\"edge\" attr.name=\"Weight\" attr.type=\"double\"/>"
-    #print "\t<graph id=\"F\" edgedefault=\"undirected\">"
-    #for i in range(0, len(measurements)):
-    #    print "\t\t<node id=\"%s\">" % measurements[i]["_id"]
-    #    print "\t\t\t<data key=\"d0\">%d</data>" % labels[i]
-    #    print "\t\t</node>"
+    print "<graphml>"
+    print "\t<key id=\"d0\" for=\"node\" attr.name=\"Modularity Class\" attr.type=\"integer\"/>"
+    print "\t<key id=\"d1\" for=\"edge\" attr.name=\"Weight\" attr.type=\"double\"/>"
+    print "\t<graph id=\"F\" edgedefault=\"undirected\">"
+    for i in range(0, len(measurements)):
+        print "\t\t<node id=\"%s\">" % measurements[i]["_id"]
+        print "\t\t\t<data key=\"d0\">%d</data>" % labels[i]
+        print "\t\t</node>"
 
-    #for i in range(0, len(distance_matrix)):
-    #    for j in range(i+1, len(distance_matrix[i])):
-    #        distance = distance_matrix[i][j]
-    #        if distance == 100:
-    #            continue
+    for i in range(0, len(distance_matrix)):
+        for j in range(i+1, len(distance_matrix[i])):
+            distance = distance_matrix[i][j]
+            if distance == 100:
+                continue
 
-    #        print "\t\t<edge source=\"%s\" target=\"%s\">" % (measurements[i]["_id"], measurements[j]["_id"])
+            print "\t\t<edge source=\"%s\" target=\"%s\">" % (measurements[i]["_id"], measurements[j]["_id"])
             
-    #        weight = (-9.0 / 100.0) * distance + 10.0
-    #        print "\t\t\t<data key=\"d1\">%d</data>" % weight
-    #        print "\t\t</edge>"
+            weight = (-9.0 / 100.0) * distance + 10.0
+            print "\t\t\t<data key=\"d1\">%d</data>" % weight
+            print "\t\t</edge>"
 
-    #print "\t</graph>"
-    #print "</graphml>"
+    print "\t</graph>"
+    print "</graphml>"
