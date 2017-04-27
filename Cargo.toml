@@ -8,9 +8,9 @@ capnpc = "0.7"
 
 [dependencies]
 bincode = {git="https://github.com/TyOverby/bincode"}
-bson = "0.6"
+bson = "0.7"
 clap = "2.19"
 curl = "0.4"
 mongodb = "0.2"
-serde = "0.9"
-serde_derive = "0.9"
+serde = "1.0"
+serde_derive = "1.0"

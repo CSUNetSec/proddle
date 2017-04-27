@@ -4,7 +4,7 @@ version = "0.4.1"
 authors = ["Dan Rammer <hamersaw@bushpath.com>"]
 
 [dependencies]
-bson = "0.6"
+bson = "0.7"
 chan = "0.1"
 clap = {version = "2.19", features = ["yaml"]}
 curl = "0.4"
