@@ -59,6 +59,7 @@ pub fn main() {
     };
 
     //start stream threadpool
+    info!("starting threadpool");
     let (stream_tx, stream_rx) = chan::sync(0);
     for _ in 0..8 {
         let t_stream_rx: Receiver<TcpStream> = stream_rx.clone();
@@ -88,6 +89,7 @@ pub fn main() {
         Err(e) => panic!("failed to bind to address '{}': {}", socket_addr, e),
     };
 
+    info!("startup complete");
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => stream_tx.send(stream),
@@ -113,7 +115,10 @@ fn handle_stream(stream: &mut TcpStream, db_wrapper: &DbWrapper) -> Result<(), P
                                 measurement_count - measurement_failures.len(), measurement_failures.len());
                             Message::send_measurements_response(measurement_failures)
                         },
-                        Err(e) => Message::error(format!("{}", e)),
+                        Err(e) => {
+                            error!("{}", e);
+                            Message::error(format!("{}", e))
+                        },
                     };
 
                     //send response
@@ -134,7 +139,10 @@ fn handle_stream(stream: &mut TcpStream, db_wrapper: &DbWrapper) -> Result<(), P
                             }
                             Message::update_operations_response(operation_buckets)
                         },
-                        Err(e) => Message::error(format!("{}", e)),
+                        Err(e) => {
+                            error!("{}", e);
+                            Message::error(format!("{}", e))
+                        },
                     };
 
                     //send response

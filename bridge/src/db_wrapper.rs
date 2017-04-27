@@ -9,33 +9,50 @@ use std::hash::{Hash, Hasher};
 use std::io::Cursor;
 
 pub struct DbWrapper {
-    inner: Client,
+    ip_address: String,
+    port: u16,
     username: String,
     password: String,
+    ca_file: String,
+    certificate_file: String,
+    key_file: String,
 }
 
 impl DbWrapper {
     pub fn new(ip_address: &str, port: u16, username: &str, password: &str, ca_file: &str, 
                certificate_file: &str, key_file: &str) -> Result<DbWrapper, ProddleError> {
-        let client = if ca_file.eq("") && certificate_file.eq("") && key_file.eq("") {
-            try!(Client::connect(&ip_address, port))
-        } else {
-            let client_options = ClientOptions::with_ssl(&ca_file, &certificate_file, &key_file, true);
-            try!(Client::connect_with_options(&ip_address, port, client_options))
-        };
-
         Ok(
             DbWrapper {
-                inner: client,
+                ip_address: ip_address.to_owned(),
+                port: port,
                 username: username.to_owned(),
                 password: password.to_owned(),
+                ca_file: ca_file.to_owned(),
+                certificate_file: certificate_file.to_owned(),
+                key_file: key_file.to_owned(),
             }
         )
     }
 
+    fn open_connection(&self) -> Result<Database, ProddleError> {
+        let client = if self.ca_file.eq("") && self.certificate_file.eq("") && self.key_file.eq("") {
+            try!(Client::connect(&self.ip_address, self.port))
+        } else {
+            let client_options = ClientOptions::with_ssl(&self.ca_file, &self.certificate_file, &self.key_file, true);
+            try!(Client::connect_with_options(&self.ip_address, self.port, client_options))
+        };
+
+        let db = client.db("proddle");
+        try!(db.auth(&self.username, &self.password));
+        Ok(db)
+    }
+
     pub fn send_measurements(&self, measurements: Vec<Vec<u8>>) -> Result<Vec<usize>, ProddleError> {
         //connect to db
-        let db = try!(connect(&self.inner, &self.username, &self.password, "proddle"));
+        let db = match self.open_connection() {
+            Ok(db) => db,
+            Err(e) => return Err(e),
+        };
 
         let mut measurement_failures = Vec::new();
         for (i, measurement) in measurements.iter().enumerate() {
@@ -59,7 +76,10 @@ impl DbWrapper {
 
     pub fn update_operations(&self, operation_bucket_hashes: HashMap<u64, u64>) -> Result<HashMap<u64, Vec<Operation>>, ProddleError> {
         //connect to db
-        let db = try!(connect(&self.inner, &self.username, &self.password, "proddle"));
+        let db = match self.open_connection() {
+            Ok(db) => db,
+            Err(e) => return Err(e),
+        };
  
         //initialize bridge side bucket hashes
         let mut s_operation_bucket_hashes = BTreeMap::new();
@@ -100,12 +120,6 @@ impl DbWrapper {
 
         Ok(s_operations)
     }
-}
-
-fn connect(client: &Client, username: &str, password: &str, database: &str) -> Result<Database, ProddleError> {
-    let db = client.db(database);
-    try!(db.auth(&username, &password));
-    Ok((db))
 }
 
 pub fn hash_string(value: &str) -> u64 {
